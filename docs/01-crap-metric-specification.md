@@ -214,6 +214,28 @@ Cyclomatic complexity = 1 + the count of the following control flow constructs:
 2. **Line coverage** — most commonly available
 3. **Basis path coverage** — original crap4j used this, but rarely available in practice
 
+**Cobertura XML Field Selection:**
+Cobertura XML provides both `branch-rate` and `line-rate` per method. The tool MUST use
+this selection logic:
+
+1. **Prefer `branch-rate`** — branch coverage is most closely aligned with cyclomatic
+   complexity (both measure decision paths).
+2. **Fall back to `line-rate`** — when `branch-rate` is absent, zero, or the method has
+   no branches (e.g., a linear method where `branch-rate="0"` but `line-rate="1.0"`
+   because all lines are executed). Specifically: if `branch-rate` is `0` AND
+   `line-rate` is `> 0` AND the method has `0` branch conditions (no `<condition>` elements),
+   use `line-rate` because the method is branchless and fully executed.
+3. **Use 0.0** if neither field is present.
+
+| `branch-rate` | `line-rate` | Has `<condition>` elements? | Selected coverage |
+|---|---|---|---|
+| 0.75 | 0.90 | Yes | 0.75 (branch-rate preferred) |
+| 0.0 | 1.0 | No | 1.0 (branchless method, use line-rate) |
+| 0.0 | 0.5 | Yes | 0.0 (has branches, none covered) |
+| absent | 0.80 | N/A | 0.80 (fallback to line-rate) |
+| 0.50 | 0.0 | Yes | 0.50 (branch-rate preferred) |
+| absent | absent | N/A | 0.0 (no data) |
+
 **Important:** Coverage MUST come from automated test execution. Manual testing
 coverage is explicitly excluded from CRAP analysis.
 

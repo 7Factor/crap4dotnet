@@ -172,7 +172,7 @@ Complexity = 1
 |---|---|---|
 | **Primary tool** | JaCoCo (modern) / EMMA (legacy) / Cobertura | **Coverlet** (standard, cross-platform) |
 | **Built-in VS support** | N/A | VS 2026 Enterprise/Community/Professional |
-| **Output format** | Cobertura XML, EMMA binary, JaCoCo XML | **Cobertura XML** (default from Coverlet) |
+| **Output format** | Cobertura XML, EMMA binary, JaCoCo XML | **Cobertura XML** (default from Coverlet). Use `branch-rate` preferred, `line-rate` fallback for branchless methods |
 | **How to generate** | Maven/Gradle plugins | `dotnet test --collect:"XPlat Code Coverage"` |
 | **Method-level coverage** | Available in all formats | Available in Cobertura XML |
 | **Branch coverage** | Available | Available via Coverlet |
