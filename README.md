@@ -4,6 +4,8 @@ A .NET global tool that computes **CRAP (Change Risk Anti-Patterns)** scores for
 
 Designed for **AI agent consumption**: JSON to stdout, structured errors to stderr, meaningful exit codes.
 
+Inspired by Robert Martin's (Uncle Bob) [crap4clj](https://github.com/unclebob/crap4clj), a port of crap4j to Clojure built to assist with AI-assisted software development. crap4dotnet brings the same capability to the .NET ecosystem.
+
 ## What is CRAP?
 
 The CRAP metric was [introduced by Alberto Savoia](http://www.artima.com/weblogs/viewpost.jsp?thread=210575) to answer: *"Is this method too complex for its level of test coverage?"*
