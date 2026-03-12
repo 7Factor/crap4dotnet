@@ -135,6 +135,8 @@ When a project or solution has **zero analyzable methods** (after filtering):
 
 ### 3.1 CRAP Threshold
 
+> **Authoritative definition:** A method is CRAPpy if and only if `CRAP(m) > threshold` (strict greater-than). Methods exactly at the threshold are NOT CRAPpy and have no CRAP Load. This comparison operator applies everywhere: classification, CRAP Load eligibility, diff categorization, and statistics.
+
 The standard threshold for "crappy" code is **CRAP score > 30** (strictly greater than).
 
 A method is CRAPpy when `CRAP(m) > threshold`. A method exactly at the threshold is NOT CRAPpy.
@@ -234,7 +236,7 @@ A histogram SHOULD be generated showing the distribution of CRAP scores across c
 ### 4.1 Definition
 
 CRAP Load is a **heuristic estimate** of the relative effort to bring a CRAPpy method back
-under the threshold. It is only computed for methods exceeding the CRAP threshold.
+under the threshold. It is only computed for methods where `CRAP(m) > threshold` (strict greater-than; see Section 3.1).
 
 > **Important:** CRAP Load is inherited from the original crap4j and is preserved for
 > compatibility. It is NOT a rigorous effort estimate — it is a rough ordering heuristic.
