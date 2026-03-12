@@ -388,6 +388,7 @@ The structure is optimized for programmatic parsing:
 
 ```json
 {
+  "schemaVersion": "1.0",
   "project": "ProjectName",
   "timestamp": "2026-03-11T12:00:00Z",
   "threshold": 30,
@@ -422,6 +423,11 @@ The structure is optimized for programmatic parsing:
 
 > **Note:** `filePath` and `lineNumber` are included to allow AI agents to navigate directly
 > to problematic methods. Coverage is normalized to 0.0-1.0 (not percentage).
+
+> **`schemaVersion`**: A semver string (`"1.0"`) that MUST be present in every report.
+> AI agents SHOULD check this field to handle format evolution. The version follows semver:
+> minor bumps add fields (backward-compatible), major bumps change or remove fields (breaking).
+> The diff report (section 10.2.1) uses the same `schemaVersion` field.
 
 ### 7.2 XML Report Structure (Legacy Compatibility)
 
