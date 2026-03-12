@@ -174,6 +174,54 @@ Statistics SHOULD be computable at multiple levels:
 - **Assembly/Project** → aggregate of all namespaces
 - **Solution** → aggregate of all assemblies
 
+#### 5.2.1 Hierarchical Aggregation in JSON Output
+
+The JSON report includes an optional `hierarchy` object that groups methods by
+namespace and class. Each group carries the same stats schema as the top-level `stats`.
+This structure allows AI agents to identify the worst namespace or class without
+post-processing the flat `methods` array.
+
+```json
+{
+  "hierarchy": {
+    "namespaces": [
+      {
+        "name": "MyApp.Services",
+        "stats": {
+          "methodCount": 25,
+          "totalCrap": 450.0,
+          "averageCrap": 18.0,
+          "medianCrap": 12.0,
+          "standardDeviation": 14.2,
+          "crappyMethodCount": 5,
+          "crappyMethodPercent": 20.0,
+          "totalCrapLoad": 120
+        },
+        "classes": [
+          {
+            "name": "UserService",
+            "stats": {
+              "methodCount": 8,
+              "totalCrap": 180.0,
+              "averageCrap": 22.5,
+              "medianCrap": 15.0,
+              "standardDeviation": 18.3,
+              "crappyMethodCount": 3,
+              "crappyMethodPercent": 37.5,
+              "totalCrapLoad": 85
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+> **Design note:** The `hierarchy` object is included by default. Agents that only need
+> the flat `methods` array can ignore it. The `methods` array remains the canonical
+> source of per-method data; `hierarchy` provides pre-computed rollups for convenience.
+
 ### 5.3 CRAP Histogram
 
 A histogram SHOULD be generated showing the distribution of CRAP scores across configurable bins
