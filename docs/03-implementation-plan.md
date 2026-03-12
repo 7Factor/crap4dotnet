@@ -270,6 +270,10 @@ echo $?  # 0 = no CRAPpy methods, 1 = CRAPpy methods found
 
 ### Phase 3: Agent-Oriented Features (Weeks 5-6)
 
+> **Phasing note:** The `diff` command ships in Phase 2 (it's a core CLI command, not an
+> extension). Phase 3 covers convenience features that enhance agent ergonomics but aren't
+> required for the core analyze+diff workflow.
+
 **Goal:** Features that make the tool maximally useful for AI coding agents.
 
 **Deliverables:**
