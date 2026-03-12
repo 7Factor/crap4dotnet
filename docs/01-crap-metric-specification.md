@@ -326,6 +326,128 @@ Compare two analysis runs to identify:
 - New CRAPpy methods (methods that became CRAPpy since last run)
 - Fixed CRAPpy methods (methods that were CRAPpy but are now below threshold)
 - Changed CRAP scores (methods whose score increased or decreased)
+- Added methods (present in "after" but not "before")
+- Removed methods (present in "before" but not "after")
+
+#### 9.2.1 Diff JSON Output Schema
+
+```json
+{
+  "schemaVersion": "1.0",
+  "type": "diff",
+  "before": {
+    "project": "MyApp",
+    "timestamp": "2026-03-10T12:00:00Z"
+  },
+  "after": {
+    "project": "MyApp",
+    "timestamp": "2026-03-11T12:00:00Z"
+  },
+  "summary": {
+    "totalMethodsBefore": 100,
+    "totalMethodsAfter": 102,
+    "crappyMethodsBefore": 12,
+    "crappyMethodsAfter": 10,
+    "totalCrapLoadBefore": 456,
+    "totalCrapLoadAfter": 320,
+    "newCrappy": 1,
+    "fixedCrappy": 3,
+    "added": 5,
+    "removed": 3,
+    "improved": 8,
+    "regressed": 2,
+    "unchanged": 87
+  },
+  "methods": {
+    "newCrappy": [
+      {
+        "fullName": "MyApp.Services.OrderService.ProcessOrder(Order) : bool",
+        "crap": 45.3,
+        "complexity": 15,
+        "coverage": 0.20,
+        "status": "new_crappy"
+      }
+    ],
+    "fixedCrappy": [
+      {
+        "fullName": "MyApp.Services.UserService.ValidateUser(string, string) : bool",
+        "crapBefore": 45.3,
+        "crapAfter": 12.0,
+        "complexityBefore": 12,
+        "complexityAfter": 12,
+        "coverageBefore": 0.35,
+        "coverageAfter": 0.95,
+        "status": "fixed"
+      }
+    ],
+    "regressed": [
+      {
+        "fullName": "MyApp.Data.Repository.Query(string) : IEnumerable",
+        "crapBefore": 15.0,
+        "crapAfter": 22.0,
+        "delta": 7.0,
+        "status": "regressed"
+      }
+    ],
+    "improved": [
+      {
+        "fullName": "MyApp.Utils.StringHelper.Parse(string) : Result",
+        "crapBefore": 25.0,
+        "crapAfter": 10.0,
+        "delta": -15.0,
+        "status": "improved"
+      }
+    ],
+    "added": [
+      {
+        "fullName": "MyApp.Services.NewService.DoWork() : void",
+        "crap": 5.0,
+        "isCrappy": false,
+        "status": "added"
+      }
+    ],
+    "removed": [
+      {
+        "fullName": "MyApp.Legacy.OldService.Run() : void",
+        "crap": 85.0,
+        "wasCrappy": true,
+        "status": "removed"
+      }
+    ]
+  }
+}
+```
+
+#### 9.2.2 Diff Classification Rules
+
+Methods are matched by `fullName` across the two reports:
+
+| Condition | Category | `status` value |
+|---|---|---|
+| In "after" only | Added | `added` |
+| In "before" only | Removed | `removed` |
+| Was NOT CRAPpy, now IS CRAPpy | New CRAPpy | `new_crappy` |
+| Was CRAPpy, now NOT CRAPpy | Fixed | `fixed` |
+| CRAP score increased (but not crossing threshold) | Regressed | `regressed` |
+| CRAP score decreased (but not crossing threshold) | Improved | `improved` |
+| CRAP score unchanged (within ±0.01) | Unchanged | (omitted from output) |
+
+> **Design note:** Unchanged methods are omitted from the `methods` section to keep
+> diff output compact. The `summary.unchanged` count tracks how many were omitted.
+
+#### 9.2.3 Diff Test Scenarios
+
+| Scenario | Before | After | Expected |
+|---|---|---|---|
+| Method added | not present | CRAP=5 | `added`, `isCrappy: false` |
+| Method removed | CRAP=85 | not present | `removed`, `wasCrappy: true` |
+| Method becomes CRAPpy | CRAP=25 | CRAP=45 | `new_crappy` |
+| Method fixed | CRAP=45 | CRAP=12 | `fixed` |
+| CRAP worsened but still clean | CRAP=5 | CRAP=15 | `regressed`, `delta: 10` |
+| CRAP improved but still CRAPpy | CRAP=80 | CRAP=50 | `improved`, `delta: -30` |
+| No change | CRAP=10 | CRAP=10 | omitted (unchanged) |
+| Empty before report | 0 methods | 50 methods | all `added` |
+| Empty after report | 50 methods | 0 methods | all `removed` |
 
 ### 9.3 Cognitive Complexity Integration
 
