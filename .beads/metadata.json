@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "crap4dotnet",
+  "project_id": "75c10e25-efe4-4a23-89b8-f006345f8cc4"
+}
