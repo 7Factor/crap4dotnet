@@ -64,6 +64,9 @@ crap4dotnet/
 │   │   │   └── CrapStatistics.cs          # Aggregation (mean, median, stddev, histogram)
 │   │   ├── Configuration/
 │   │   │   └── CrapOptions.cs             # Threshold, severity bands, configurable rules
+│   │   ├── Matching/
+│   │   │   ├── MethodCoverageMatcher.cs   # Join complexity + coverage by method identity
+│   │   │   └── MethodIdentityNormalizer.cs # Normalize Cobertura/Roslyn names to canonical form
 │   │   └── Abstractions/
 │   │       ├── IComplexityAnalyzer.cs      # Interface for complexity providers
 │   │       ├── ICoverageReader.cs          # Interface for coverage data providers
@@ -76,9 +79,8 @@ crap4dotnet/
 │   │   └── RoslynComplexityAnalyzer.cs          # IComplexityAnalyzer implementation
 │   │
 │   ├── Crap4DotNet.Coverage/             # Coverage data readers (net8.0)
-│   │   ├── Cobertura/
-│   │   │   └── CoberturaCoverageReader.cs       # Parse coverage.cobertura.xml
-│   │   └── MethodCoverageMatcher.cs             # Match coverage data to method identities
+│   │   └── Cobertura/
+│   │       └── CoberturaCoverageReader.cs       # Parse coverage.cobertura.xml
 │   │
 │   ├── Crap4DotNet.Reporting/            # Report generators (net8.0)
 │   │   ├── Json/
@@ -170,7 +172,8 @@ crap4dotnet/
 - [ ] Implement `CrapStatistics` with all aggregation metrics
 - [ ] Implement `CyclomaticComplexityWalker` as a Roslyn `CSharpSyntaxWalker`
 - [ ] Implement `CoberturaCoverageReader` parsing Coverlet's output XML
-- [ ] Implement `MethodCoverageMatcher` to join complexity and coverage data
+- [ ] Implement `MethodCoverageMatcher` in Core to join complexity and coverage data
+- [ ] Implement `MethodIdentityNormalizer` in Core with `NormalizeFromCobertura()` and `NormalizeFromRoslyn()`
 - [ ] Write comprehensive unit tests for formula edge cases
 - [ ] Write complexity walker tests against C# samples with known complexity
 - [ ] Validate Cobertura reader against real Coverlet output
