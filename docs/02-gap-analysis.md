@@ -57,7 +57,7 @@ decisions about code quality, refactoring priorities, and test coverage gaps.
 
 | Feature | Rationale | Implementation Approach |
 |---|---|---|
-| **Roslyn-based complexity analysis** | .NET's compiler-as-a-service (Roslyn) enables source-level analysis without bytecode. More accurate than bytecode analysis, works with any .NET language. | Use `Microsoft.CodeAnalysis.CSharp` to walk syntax trees and count decision points |
+| **Roslyn-based complexity analysis** | .NET's compiler-as-a-service (Roslyn) enables source-level analysis without bytecode. More accurate than bytecode analysis. | Use `Microsoft.CodeAnalysis.CSharp` to parse syntax trees only (no MSBuild workspace loading). Cyclomatic complexity is purely syntactic. |
 | **Coverlet integration** | Coverlet is the standard .NET code coverage tool, outputs Cobertura XML. Already produces the format we need. | Parse `coverage.cobertura.xml` from `dotnet test --collect:"XPlat Code Coverage"` |
 | **`dotnet tool` CLI** | AI agents invoke CLI tools directly. Must be installable via `dotnet tool install -g crap4dotnet` | Package as a .NET Global Tool via NuGet |
 | **Structured JSON output** | AI agents parse JSON natively. This is the primary output format. | `System.Text.Json` serialization with well-defined schema |

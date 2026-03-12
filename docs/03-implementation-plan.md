@@ -21,9 +21,9 @@
     │  Complexity Engine   │       │   Coverage Reader     │
     │  (Roslyn-based)      │       │   (Cobertura XML)     │
     │                      │       │   (OpenCover XML)     │
-    │  - Walks syntax tree │       │                       │
-    │  - Counts decisions  │       │  - Parses XML files   │
-    │  - Per-method scores │       │  - Maps to methods    │
+    │  - Parses .cs files  │       │                       │
+    │  - Walks syntax tree │       │  - Parses XML files   │
+    │  - No MSBuild needed │       │  - Maps to methods    │
     └──────────┬───────────┘       └───────────┬───────────┘
                │                               │
     ┌──────────▼───────────────────────────────▼───────────┐
@@ -128,8 +128,7 @@ crap4dotnet/
 
 | Package | Purpose | Version |
 |---|---|---|
-| `Microsoft.CodeAnalysis.CSharp` | Roslyn compiler APIs for syntax analysis | 4.x (latest stable) |
-| `Microsoft.CodeAnalysis.Workspaces.MSBuild` | Load .csproj/.sln for analysis | 4.x |
+| `Microsoft.CodeAnalysis.CSharp` | Roslyn compiler APIs for syntax-tree analysis | 4.x (latest stable) |
 | `System.CommandLine` | CLI argument parsing | 2.x |
 | `System.Text.Json` | JSON serialization | Built-in (.NET 8) |
 
@@ -165,7 +164,17 @@ crap4dotnet/
 - [ ] Validate Cobertura reader against real Coverlet output
 
 **Key Design Decisions:**
-- Complexity walker analyzes **source code** (not IL), ensuring accuracy for async, LINQ, etc.
+- **Syntax-tree-only analysis (no MSBuild workspace):** The complexity walker uses
+  `CSharpSyntaxTree.ParseText()` on individual `.cs` files — it does NOT load MSBuild
+  workspaces or compile the project. This means:
+  - No `Microsoft.CodeAnalysis.Workspaces.MSBuild` dependency (saves ~50MB of transitive deps)
+  - Fast startup: parsing is ~10x faster than loading a workspace
+  - Works without the .NET SDK's MSBuild targets being available
+  - File discovery: when given a `.csproj`, read the `<Compile>` items or glob `**/*.cs`
+    (excluding `obj/`, `bin/`). When given a `.sln`, parse it for project paths.
+  - Trade-off: no semantic model (can't resolve types across files). This is acceptable
+    because cyclomatic complexity is purely syntactic — it counts decision points in syntax
+    trees without needing type resolution.
 - Coverage reader produces `Dictionary<MethodIdentity, double>` for O(1) lookup
 - All calculations use `double` precision (matching crap4j)
 
@@ -262,7 +271,6 @@ echo $?  # 0 = no CRAPpy methods, 1 = CRAPpy methods found
 - [ ] Add configurable complexity rules (count `?.`, `??`, LINQ, etc.)
 - [ ] Add source generator / `[GeneratedCode]` attribute exclusion
 - [ ] Add method-level `[SuppressCrap]` attribute support
-- [ ] Lazy Roslyn compilation (only parse syntax trees, don't do full compilation)
 - [ ] Pre-filter files by coverage data (skip files with no coverage entries)
 
 ---
