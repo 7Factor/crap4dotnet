@@ -148,7 +148,60 @@ Complexity = 1
 > pattern is NOT a `DiscardPatternSyntax`. Do not use "count all arms minus 1" as this
 > breaks when there is no discard/default arm.
 
-### 5.3 Key Differences
+### 5.3 C#-Specific Construct Handling
+
+The following C# constructs require explicit handling rules:
+
+#### Partial Methods
+
+Partial methods (`partial void OnLoad()`) may have only a declaration (no body) or a
+declaration and an implementing body.
+
+- **Declaration only (no body):** Excluded from analysis (no code to measure). The compiler
+  removes the call site entirely.
+- **Declaration with implementing body:** Analyzed normally. The implementing declaration
+  is the one with the body; complexity is computed from that body.
+
+#### Local Functions
+
+C# 7+ supports local functions (functions nested inside methods):
+
+```csharp
+void ParentMethod() {
+    int LocalFunc(int x) => x > 0 ? x : -x;  // local function
+    Console.WriteLine(LocalFunc(42));
+}
+```
+
+Local functions are treated as **separate methods** for CRAP analysis:
+- Each local function gets its own CRAP score with its own complexity count
+- The parent method's complexity does NOT include the local function's body
+- In the report, local functions appear as `Namespace.Type.ParentMethod.LocalFunc(int)`
+
+> **Rationale:** Local functions are independently testable units. Folding their complexity
+> into the parent would inflate the parent's score and hide the local function from analysis.
+> This matches how coverage tools (Coverlet) report local functions — as separate entries.
+
+#### Top-Level Statements
+
+C# 9+ allows top-level statements (no explicit `Main` method):
+
+```csharp
+// Program.cs — no class, no Main
+using System;
+Console.WriteLine("Hello");
+if (args.Length > 0) Console.WriteLine(args[0]);
+```
+
+The compiler generates a synthetic `<Main>$` method. In the report:
+- **Method name:** `<Main>$` (matching the compiler-generated name)
+- **Class name:** `Program` (the implicit class)
+- **Full name:** `Program.<Main>$(string[])` (matching Coverlet's representation)
+
+Top-level statements are analyzed normally — their complexity reflects the control flow
+in the top-level code.
+
+### 5.4 Key Differences
 
 | Construct | Java (bytecode) | C# (Roslyn) | Notes |
 |---|---|---|---|
