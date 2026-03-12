@@ -25,8 +25,12 @@ Methods with a CRAP score above the threshold (default: 30) are **CRAPpy** — t
 
 ## Install
 
+Not yet published to NuGet. Install from source:
+
 ```bash
-dotnet tool install -g Crap4DotNet
+git clone <repo-url> && cd crap4dotnet
+dotnet pack src/Crap4DotNet.Cli -o ./nupkg
+dotnet tool install -g Crap4DotNet --add-source ./nupkg
 ```
 
 Requires .NET 8.0 or later.

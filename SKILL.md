@@ -1,13 +1,26 @@
 ---
 name: crap
 description: Analyze C# code for CRAP (Change Risk Anti-Patterns) metrics using dotnet-crap
+license: MIT
+compatibility: Requires .NET 8.0+ SDK. The dotnet-crap global tool must be installed.
+metadata:
+  author: 7Factor
+  version: "0.1.0"
 ---
 
 You have access to `dotnet-crap`, a .NET global tool that computes CRAP scores for C# code. CRAP combines cyclomatic complexity with code coverage to find methods that are both complex and poorly tested.
 
 ## Prerequisites
 
-The tool must be installed: `dotnet tool install -g Crap4DotNet`
+The tool is not yet published to NuGet. Install from source:
+
+```bash
+git clone <repo-url> && cd crap4dotnet
+dotnet pack src/Crap4DotNet.Cli -o ./nupkg
+dotnet tool install -g Crap4DotNet --add-source ./nupkg
+```
+
+Verify with `dotnet-crap --version`.
 
 ## How to Analyze a Project
 
