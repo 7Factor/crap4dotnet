@@ -401,25 +401,34 @@ Cyclomatic complexity = 1 + the count of the following control flow constructs:
 
 **Cobertura XML Field Selection:**
 Cobertura XML provides both `branch-rate` and `line-rate` per method. The tool MUST use
-this selection logic:
+the following decision tree (evaluated top-to-bottom, first match wins):
 
-1. **Prefer `branch-rate`** — branch coverage is most closely aligned with cyclomatic
-   complexity (both measure decision paths).
-2. **Fall back to `line-rate`** — when `branch-rate` is absent, zero, or the method has
-   no branches (e.g., a linear method where `branch-rate="0"` but `line-rate="1.0"`
-   because all lines are executed). Specifically: if `branch-rate` is `0` AND
-   `line-rate` is `> 0` AND the method has `0` branch conditions (no `<condition>` elements),
-   use `line-rate` because the method is branchless and fully executed.
-3. **Use 0.0** if neither field is present.
+```
+1. If `branch-rate` attribute is MISSING → use `line-rate`
+2. If `branch-rate` attribute is PRESENT:
+   a. Count `<condition>` child elements in the method's `<lines>/<line>` entries
+   b. If condition count == 0 → method is BRANCHLESS → use `line-rate`
+      (branch-rate is meaningless for branchless methods; Coverlet emits
+       branch-rate="0" or branch-rate="1" arbitrarily for these)
+   c. If condition count > 0 → method HAS BRANCHES → use `branch-rate`
+3. If neither `branch-rate` nor `line-rate` is present → use 0.0
+```
 
-| `branch-rate` | `line-rate` | Has `<condition>` elements? | Selected coverage |
-|---|---|---|---|
-| 0.75 | 0.90 | Yes | 0.75 (branch-rate preferred) |
-| 0.0 | 1.0 | No | 1.0 (branchless method, use line-rate) |
-| 0.0 | 0.5 | Yes | 0.0 (has branches, none covered) |
-| absent | 0.80 | N/A | 0.80 (fallback to line-rate) |
-| 0.50 | 0.0 | Yes | 0.50 (branch-rate preferred) |
-| absent | absent | N/A | 0.0 (no data) |
+> **Branchless detection:** A method is branchless when its Cobertura XML has zero
+> `<condition>` elements across all `<line>` entries. Do NOT rely on `branch-rate="0"`
+> alone — a method with branches where none are covered also has `branch-rate="0"`.
+> The `<condition>` element count is the authoritative signal.
+
+| `branch-rate` | `line-rate` | `<condition>` count | Selected coverage | Reason |
+|---|---|---|---|---|
+| 0.75 | 0.90 | 3 | 0.75 | Has branches, use branch-rate |
+| 0.0 | 1.0 | 0 | 1.0 | Branchless, use line-rate |
+| 0.0 | 0.5 | 2 | 0.0 | Has branches, none covered |
+| 0.0 | 1.0 | 4 | 0.0 | Has branches, none covered |
+| absent | 0.80 | N/A | 0.80 | No branch-rate, fallback to line-rate |
+| 0.50 | 0.0 | 1 | 0.50 | Has branches, use branch-rate |
+| absent | absent | N/A | 0.0 | No data available |
+| 1.0 | 0.80 | 0 | 0.80 | Branchless (branch-rate="1" is noise) |
 
 **Important:** Coverage MUST come from automated test execution. Manual testing
 coverage is explicitly excluded from CRAP analysis.
