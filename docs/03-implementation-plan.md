@@ -257,6 +257,17 @@ dotnet crap analyze ./src/MyApp.sln --quiet --threshold 30
 echo $?  # 0 = no CRAPpy methods, 1 = CRAPpy methods found
 ```
 
+**`--filter` flag semantics:**
+- **Matches against `fullName`** — the fully-qualified method name (e.g., `MyApp.Services.UserService.GetById(int)`)
+- **Glob syntax** — uses `*` (any characters) and `?` (single character). No regex.
+- **Multiple filters** — `--filter` can be specified multiple times. Filters combine with OR (a method matches if it matches ANY filter).
+- **Include semantics** — `--filter` is an include filter. Only methods matching at least one filter are analyzed. Without `--filter`, all methods are included.
+- **Applies to analyze only** — the diff command compares full reports; filtering happens at analysis time, not diff time.
+- Examples:
+  - `--filter "MyApp.Services.*"` — all methods in the `MyApp.Services` namespace (and children)
+  - `--filter "*.GetById*"` — any method named `GetById` in any class
+  - `--filter "MyApp.Core.*" --filter "MyApp.Services.*"` — methods in either namespace
+
 ### Phase 3: Agent-Oriented Features (Weeks 5-6)
 
 **Goal:** Features that make the tool maximally useful for AI coding agents.
