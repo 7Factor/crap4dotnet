@@ -799,34 +799,38 @@ Compare two analysis runs to identify:
 
 #### 10.2.2 Diff Classification Rules
 
-Methods are matched by `fullName` across the two reports:
+Methods are matched by `fullName` across the two reports. Classifications are evaluated in **strict priority order** — the first matching rule wins:
 
-| Condition | Category | `status` value |
-|---|---|---|
-| In "after" only | Added | `added` |
-| In "before" only | Removed | `removed` |
-| Was NOT CRAPpy, now IS CRAPpy | New CRAPpy | `new_crappy` |
-| Was CRAPpy, now NOT CRAPpy | Fixed | `fixed` |
-| CRAP score increased (but not crossing threshold) | Regressed | `regressed` |
-| CRAP score decreased (but not crossing threshold) | Improved | `improved` |
-| CRAP score unchanged (within ±0.01) | Unchanged | (omitted from output) |
+| Priority | Condition | Category | `status` value |
+|---|---|---|---|
+| 1 | In "after" only (no match in "before") | Added | `added` |
+| 2 | In "before" only (no match in "after") | Removed | `removed` |
+| 3 | Was NOT CRAPpy, now IS CRAPpy (threshold crossed upward) | New CRAPpy | `new_crappy` |
+| 4 | Was CRAPpy, now NOT CRAPpy (threshold crossed downward) | Fixed | `fixed` |
+| 5 | CRAP score changed by > ±0.01 and increased | Regressed | `regressed` |
+| 6 | CRAP score changed by > ±0.01 and decreased | Improved | `improved` |
+| 7 | CRAP score unchanged (within ±0.01) | Unchanged | (omitted from output) |
+
+> **Priority rationale:** Added/Removed are checked first because the method doesn't exist in both reports. Threshold-crossing categories (New CRAPpy/Fixed) take priority over direction-only categories (Regressed/Improved) because crossing the threshold is a more significant event. A method going from CRAP 25 to CRAP 45 is classified as `new_crappy` (not `regressed`), and a method going from CRAP 50 to CRAP 25 is classified as `fixed` (not `improved`).
 
 > **Design note:** Unchanged methods are omitted from the `methods` section to keep
 > diff output compact. The `summary.unchanged` count tracks how many were omitted.
 
 #### 10.2.3 Diff Test Scenarios
 
-| Scenario | Before | After | Expected |
-|---|---|---|---|
-| Method added | not present | CRAP=5 | `added`, `isCrappy: false` |
-| Method removed | CRAP=85 | not present | `removed`, `wasCrappy: true` |
-| Method becomes CRAPpy | CRAP=25 | CRAP=45 | `new_crappy` |
-| Method fixed | CRAP=45 | CRAP=12 | `fixed` |
-| CRAP worsened but still clean | CRAP=5 | CRAP=15 | `regressed`, `delta: 10` |
-| CRAP improved but still CRAPpy | CRAP=80 | CRAP=50 | `improved`, `delta: -30` |
-| No change | CRAP=10 | CRAP=10 | omitted (unchanged) |
-| Empty before report | 0 methods | 50 methods | all `added` |
-| Empty after report | 50 methods | 0 methods | all `removed` |
+| Scenario | Before | After | Expected | Priority rule |
+|---|---|---|---|---|
+| Method added | not present | CRAP=5 | `added`, `isCrappy: false` | P1: added |
+| Method removed | CRAP=85 | not present | `removed`, `wasCrappy: true` | P2: removed |
+| Method becomes CRAPpy | CRAP=25 | CRAP=45 | `new_crappy` | P3: threshold crossed up |
+| Method fixed | CRAP=45 | CRAP=12 | `fixed` | P4: threshold crossed down |
+| Worsened, crossed threshold | CRAP=25 | CRAP=35 | `new_crappy` (not `regressed`) | P3 wins over P5 |
+| Improved, crossed threshold | CRAP=50 | CRAP=25 | `fixed` (not `improved`) | P4 wins over P6 |
+| CRAP worsened but still clean | CRAP=5 | CRAP=15 | `regressed`, `delta: 10` | P5: increased |
+| CRAP improved but still CRAPpy | CRAP=80 | CRAP=50 | `improved`, `delta: -30` | P6: decreased |
+| No change | CRAP=10 | CRAP=10 | omitted (unchanged) | P7: unchanged |
+| Empty before report | 0 methods | 50 methods | all `added` | P1: added |
+| Empty after report | 50 methods | 0 methods | all `removed` | P2: removed |
 
 ### 10.3 Cognitive Complexity Integration
 
