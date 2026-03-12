@@ -284,7 +284,7 @@ echo $?  # 0 = no CRAPpy methods, 1 = CRAPpy methods found
 
 **Tasks:**
 - [ ] Implement single-file analysis: `dotnet crap analyze --file ./src/MyService.cs`
-- [ ] Support reading coverage data from stdin: `--coverage -`
+- [ ] Support reading coverage data from stdin: `--coverage -` (enables `dotnet test | dotnet crap analyze` piping)
 - [ ] ~~Add configuration file (`.crap4dotnet.json`) for per-project defaults~~ (deferred to v2)
 - [ ] Add `--top N` flag to return only the N worst methods (most useful for agents)
 - [ ] Add `--sort-by crap|complexity|coverage|crapLoad` for result ordering
