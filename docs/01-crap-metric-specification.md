@@ -174,8 +174,14 @@ A method is CRAPpy when `CRAP(m) > threshold`. A method exactly at the threshold
 
 ### 4.1 Definition
 
-CRAP Load quantifies the **effort required** to bring a CRAPpy method back under the threshold.
-It is only computed for methods exceeding the CRAP threshold.
+CRAP Load is a **heuristic estimate** of the relative effort to bring a CRAPpy method back
+under the threshold. It is only computed for methods exceeding the CRAP threshold.
+
+> **Important:** CRAP Load is inherited from the original crap4j and is preserved for
+> compatibility. It is NOT a rigorous effort estimate — it is a rough ordering heuristic.
+> The `comp/threshold` term is a constant ratio per method that doesn't scale with the
+> actual gap to the threshold. Use CRAP Load for **ranking** which CRAPpy methods need the
+> most work, not for estimating actual development hours.
 
 ### 4.2 Formula
 
@@ -193,6 +199,14 @@ else:
 
 Higher CRAP Load = more work needed (combination of uncovered complexity and absolute complexity).
 The total CRAP Load of a project is the sum of all method CRAP Loads.
+
+> **Heuristic limitations:** For a method with comp=60, threshold=30:
+> - At cov=0.0: `crapLoad = 60 * 1.0 + 60/30 = 62.0`
+> - At cov=0.5: `crapLoad = 60 * 0.5 + 60/30 = 32.0`
+>
+> The `comp/threshold` term (2.0 in both cases) is constant regardless of coverage gap.
+> Despite this, CRAP Load remains useful for ranking: methods with higher uncovered
+> complexity consistently rank higher, which is the intended use case.
 
 ---
 
