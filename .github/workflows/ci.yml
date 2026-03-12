@@ -34,4 +34,4 @@ jobs:
 
       - name: Self-analyze with CRAP metrics
         continue-on-error: true
-        run: dotnet-crap analyze ./crap4dotnet.sln --run-tests
+        run: dotnet-crap analyze ./crap4dotnet.sln --run-tests --output crap-report.json

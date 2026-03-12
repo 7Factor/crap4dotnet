@@ -172,6 +172,7 @@ internal static class AnalyzeCommand
         if (outputPath is not null)
         {
             File.WriteAllText(outputPath, json);
+            Console.WriteLine(SummaryReportWriter.Write(outputData));
         }
         else
         {

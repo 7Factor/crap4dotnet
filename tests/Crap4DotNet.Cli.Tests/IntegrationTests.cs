@@ -260,7 +260,7 @@ public sealed class IntegrationTests : IDisposable
         var (exitCode, stdout, _) = InvokeAnalyze(sourcePath, "--coverage", coveragePath, "--output", outputPath);
 
         exitCode.Should().Be(0);
-        stdout.Should().BeEmpty(); // output went to file, not stdout
+        stdout.Should().Contain("CRAP Report:"); // summary written to stdout
         File.Exists(outputPath).Should().BeTrue();
         var json = File.ReadAllText(outputPath);
         var doc = JsonDocument.Parse(json);
