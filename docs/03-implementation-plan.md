@@ -76,14 +76,19 @@ crap4dotnet/
 │   │   │   └── MethodDiscovery.cs               # Find all methods in a compilation
 │   │   ├── Coverage/
 │   │   │   └── CoberturaCoverageReader.cs       # Parse coverage.cobertura.xml
-│   │   └── Reporting/
-│   │       └── JsonReportWriter.cs              # Structured JSON for AI agents
+│   │   ├── Abstractions/
+│   │   │   ├── IComplexityAnalyzer.cs           # Interface for complexity providers
+│   │   │   ├── ICoverageReader.cs               # Interface for coverage data providers
+│   │   │   └── IReportWriter.cs                 # Interface for report output
+│   │   └── CrapAnalyzer.cs                      # Orchestrator: the analysis pipeline
 │   │
 │   └── Crap4DotNet.Cli/                  # CLI application (net8.0)
 │       ├── Program.cs                     # Entry point + manual composition
 │       ├── Commands/
 │       │   ├── AnalyzeCommand.cs          # Main analysis command
 │       │   └── DiffCommand.cs             # Compare two JSON reports
+│       ├── Reporting/
+│       │   └── JsonReportWriter.cs              # IReportWriter impl (delivery detail)
 │       └── Crap4DotNet.Cli.csproj         # Packed as dotnet global tool
 │
 ├── tests/
@@ -193,11 +198,12 @@ crap4dotnet/
 
 **Goal:** Working `dotnet crap` CLI tool that AI agents can invoke and parse.
 
-> **Orchestration ownership:** The CLI layer (`Program.cs` / `AnalyzeCommand`) owns the
-> full analysis pipeline: parse source → compute complexity → read coverage → match methods
-> → calculate CRAP → generate report. There is no separate `AnalysisPipeline` abstraction.
-> This is deliberate: the pipeline is a straight-line sequence with no branching or reuse
-> outside the CLI. Manual composition in `Program.cs` wires the components together directly.
+> **Orchestration:** A `CrapAnalyzer` class in Core owns the analysis pipeline: parse source
+> → compute complexity → read coverage → match methods → calculate CRAP → compute stats.
+> It accepts `IComplexityAnalyzer` and `ICoverageReader` and returns `ProjectCrapData`.
+> The CLI layer composes the object graph and calls `CrapAnalyzer.Analyze()`, then passes
+> the result to `IReportWriter`. This keeps the highest-level policy in Core (Dependency Rule)
+> and enables in-process integration tests without shelling out to the CLI.
 
 **Deliverables:**
 1. `Crap4DotNet.Cli` — Global tool with `analyze` and `diff` commands
