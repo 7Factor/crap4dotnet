@@ -123,21 +123,30 @@ Use **Roslyn syntax tree walking** to count decision points:
 
 ```
 Complexity = 1
-  + count(IfStatementSyntax)
-  + count(ElseClauseSyntax with if — i.e., "else if")
+  + count(IfStatementSyntax)               // includes "else if" — see note below
   + count(ForStatementSyntax)
   + count(ForEachStatementSyntax)
   + count(WhileStatementSyntax)
   + count(DoStatementSyntax)
   + count(CaseSwitchLabelSyntax)           // traditional switch cases
   + count(CasePatternSwitchLabelSyntax)    // pattern switch cases
-  + count(SwitchExpressionArmSyntax) - 1   // switch expression arms (minus default)
+  + count(non-discard SwitchExpressionArmSyntax)  // exclude DiscardPatternSyntax arms
   + count(CatchClauseSyntax)
   + count(ConditionalExpressionSyntax)     // ternary ?:
   + count(BinaryExpression where kind is LogicalAnd or LogicalOr)  // && ||
   + count(CoalesceExpression)              // ?? (configurable)
   + count(ConditionalAccessExpression)     // ?. (configurable)
 ```
+
+> **IMPORTANT — `else if` handling:** In the Roslyn AST, `else if (x)` is parsed as an
+> `ElseClause` containing a child `IfStatementSyntax`. The `CSharpSyntaxWalker` will
+> naturally visit that inner `IfStatementSyntax` when walking the tree. Therefore, counting
+> all `IfStatementSyntax` nodes already includes `else if`. Do NOT separately count
+> `ElseClause` nodes — this would double-count every `else if` branch.
+>
+> **IMPORTANT — Switch expression arms:** Count each `SwitchExpressionArmSyntax` whose
+> pattern is NOT a `DiscardPatternSyntax`. Do not use "count all arms minus 1" as this
+> breaks when there is no discard/default arm.
 
 ### 5.3 Key Differences
 

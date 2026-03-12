@@ -77,7 +77,8 @@ Where:
 3. **Coverage has diminishing returns**: Cubed term means each additional percentage of coverage
    matters more for high-complexity methods.
 4. **Complexity of 31+ cannot be "saved" by coverage alone** — even at 100% coverage,
-   CRAP(31, 1.0) = 31 which exceeds the threshold.
+   CRAP(31, 1.0) = 31 which exceeds the threshold of 30.
+5. **CRAP(30, 1.0) = 30 exactly equals the threshold** and is NOT CRAPpy (see Section 3.1).
 
 ---
 
@@ -85,7 +86,16 @@ Where:
 
 ### 3.1 CRAP Threshold
 
-The standard threshold for "crappy" code is **CRAP score >= 30**.
+The standard threshold for "crappy" code is **CRAP score > 30** (strictly greater than).
+
+A method is CRAPpy when `CRAP(m) > threshold`. A method exactly at the threshold is NOT CRAPpy.
+
+> **Design note:** The original crap4j source code uses `>=` in the `calculateCrapLoad` method,
+> but the original documentation and FAQ tables consistently describe CRAP=30 as "below CRAPpy
+> threshold" (e.g., complexity 0-5 with 0% coverage produces CRAP=30 and is listed as requiring
+> 0% coverage to stay below the threshold). We follow the documentation semantics, not the
+> likely-buggy `>=` in the source. This also means `CRAP(30, 1.0) = 30` is NOT CRAPpy,
+> consistent with the coverage table showing complexity 26-30 as achievable with 100% coverage.
 
 ### 3.2 Required Coverage by Complexity
 
@@ -105,8 +115,8 @@ The standard threshold for "crappy" code is **CRAP score >= 30**.
 |---|---|---|
 | 1 – 5 | Low | No action needed |
 | 6 – 15 | Moderate | Consider adding tests |
-| 16 – 29 | Elevated | Prioritize test coverage |
-| 30 – 60 | High (CRAPpy) | Refactor and/or add tests |
+| 16 – 30 | Elevated | Prioritize test coverage |
+| 31 – 60 | High (CRAPpy) | Refactor and/or add tests |
 | 60+ | Critical | Urgent refactoring required |
 
 ---
@@ -121,11 +131,14 @@ It is only computed for methods exceeding the CRAP threshold.
 ### 4.2 Formula
 
 ```
-if CRAP(m) >= threshold:
+if CRAP(m) > threshold:
     crapLoad(m) = comp(m) * (1 - cov(m)) + comp(m) / threshold
 else:
     crapLoad(m) = 0
 ```
+
+> **Note:** The comparison is strictly greater than (`>`). A method with CRAP exactly equal
+> to the threshold has a CRAP Load of 0 and is not considered CRAPpy.
 
 ### 4.3 Interpretation
 
@@ -147,7 +160,7 @@ The following statistics MUST be computed across all methods in the analyzed cod
 | **Average CRAP** | Total CRAP / Method Count |
 | **Median CRAP** | Median of all method CRAP scores |
 | **Standard Deviation** | Std dev of all method CRAP scores |
-| **CRAPpy Method Count** | Number of methods with CRAP >= threshold |
+| **CRAPpy Method Count** | Number of methods with CRAP > threshold |
 | **CRAPpy Method Percent** | CRAPpy Method Count / Method Count * 100 |
 | **Total CRAP Load** | Sum of all method CRAP Loads |
 | **CRAP Threshold** | The configured threshold (default: 30) |
@@ -176,17 +189,19 @@ A histogram SHOULD be generated showing the distribution of CRAP scores across c
 
 **Calculation Method (Language-Agnostic):**
 Cyclomatic complexity = 1 + the count of the following control flow constructs:
-- `if` / `else if` / conditional expressions (ternary)
+- `if` statements (each `if` keyword counts once, including those in `else if` chains)
+- Conditional/ternary expressions (`?:`)
 - `for` / `foreach` / `while` / `do-while` loops
-- `case` labels in switch/match statements (not the switch itself)
+- `case` labels in switch/match statements (not the switch itself, not the default)
+- Switch expression arms (excluding the discard/default arm)
 - `catch` blocks
 - Logical AND (`&&`) and OR (`||`) operators (short-circuit evaluation creates branch points)
-- Null-coalescing operators (if they create branch points)
+- Null-coalescing operators — configurable (language-specific)
 
 **Excluded from complexity count:**
-- `else` (already counted by `if`)
+- `else` (the `if` keyword already counts the branch; `else if` is counted by its `if`)
 - `finally` blocks
-- `default` case (debatable — configurable)
+- `default` / discard arms in switch (these are the fallthrough, not a decision)
 - Abstract/interface methods (complexity = 0, should be excluded from CRAP)
 - Empty methods (complexity = 0, should be excluded)
 

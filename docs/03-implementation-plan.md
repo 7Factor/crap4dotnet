@@ -315,6 +315,10 @@ public class CyclomaticComplexityWalker : CSharpSyntaxWalker
 {
     public int Complexity { get; private set; } = 1; // Start at 1
 
+    // NOTE: IfStatementSyntax is visited for EVERY "if" keyword, including
+    // those inside "else if" chains. In Roslyn, "else if (x)" is an ElseClause
+    // containing a child IfStatementSyntax. The walker naturally visits it.
+    // Do NOT add a separate VisitElseClause — that would double-count.
     public override void VisitIfStatement(IfStatementSyntax node)
     {
         Complexity++;
@@ -382,7 +386,8 @@ public class CyclomaticComplexityWalker : CSharpSyntaxWalker
 
     public override void VisitSwitchExpressionArm(SwitchExpressionArmSyntax node)
     {
-        // Don't count the discard/default arm
+        // Count each arm EXCEPT the discard pattern (default).
+        // Do NOT use "total arms - 1" — that breaks when there is no default.
         if (node.Pattern is not DiscardPatternSyntax)
         {
             Complexity++;
@@ -408,12 +413,46 @@ The trickiest part: matching Roslyn method symbols to Coverlet coverage entries.
 IMethodSymbol.ToDisplayString() → "MyApp.Services.UserService.ValidateUser(string, string)"
 ```
 
-Strategy: Normalize both sides to a canonical form for matching:
-- Strip generic arity markers
-- Normalize primitive type names (`string` ↔ `System.String`)
-- Handle property accessors (`get_PropertyName` / `set_PropertyName`)
-- Handle operator overloads
-- Handle explicit interface implementations
+**Strategy:** Normalize both sides to a canonical form for matching:
+- Normalize primitive type names (`string` ↔ `System.String`, `int` ↔ `System.Int32`, etc.)
+- Strip generic arity markers (`List`1` → `List`)
+- Handle property accessors (`get_Name` / `set_Name` ↔ `Name.get` / `Name.set`)
+- Handle operator overloads (`op_Addition` ↔ `operator +`)
+- Handle explicit interface implementations (prefixed with interface name)
+- Handle nested types (`Outer+Inner` ↔ `Outer.Inner`)
+
+#### 6.2.1 Method Identity Matching Test Cases
+
+The following concrete pairs MUST match. Each row shows the Cobertura XML representation
+and the Roslyn representation that should resolve to the same method:
+
+| # | Scenario | Cobertura class | Cobertura method | Cobertura signature | Roslyn display string |
+|---|---|---|---|---|---|
+| 1 | Simple method | `MyApp.UserService` | `Validate` | `(System.String)` | `MyApp.UserService.Validate(string)` |
+| 2 | Primitive types | `MyApp.MathHelper` | `Add` | `(System.Int32, System.Int32)` | `MyApp.MathHelper.Add(int, int)` |
+| 3 | Nullable value type | `MyApp.Parser` | `TryParse` | `(System.String, System.Nullable{System.Int32})` | `MyApp.Parser.TryParse(string, int?)` |
+| 4 | Generic method | `MyApp.Repo` | `Find` | `(System.Func{T,System.Boolean})` | `MyApp.Repo.Find<T>(Func<T, bool>)` |
+| 5 | Generic class | `MyApp.Cache`1` | `Get` | `(System.String)` | `MyApp.Cache<T>.Get(string)` |
+| 6 | Nested type | `MyApp.Outer+Inner` | `DoWork` | `()` | `MyApp.Outer.Inner.DoWork()` |
+| 7 | Property getter | `MyApp.Config` | `get_Timeout` | `()` | `MyApp.Config.Timeout.get` |
+| 8 | Property setter | `MyApp.Config` | `set_Timeout` | `(System.Int32)` | `MyApp.Config.Timeout.set` |
+| 9 | Indexer getter | `MyApp.Collection` | `get_Item` | `(System.Int32)` | `MyApp.Collection.this[int].get` |
+| 10 | Operator overload | `MyApp.Money` | `op_Addition` | `(MyApp.Money, MyApp.Money)` | `MyApp.Money.operator +(Money, Money)` |
+| 11 | Explicit interface | `MyApp.MyList` | `System.IDisposable.Dispose` | `()` | `MyApp.MyList.System.IDisposable.Dispose()` |
+| 12 | Overloaded method (A) | `MyApp.Logger` | `Log` | `(System.String)` | `MyApp.Logger.Log(string)` |
+| 13 | Overloaded method (B) | `MyApp.Logger` | `Log` | `(System.String, System.Exception)` | `MyApp.Logger.Log(string, Exception)` |
+| 14 | Constructor | `MyApp.Service` | `.ctor` | `(System.String)` | `MyApp.Service.Service(string)` |
+| 15 | Static constructor | `MyApp.Service` | `.cctor` | `()` | `MyApp.Service.Service()` (static) |
+| 16 | Async method | `MyApp.ApiClient` | `FetchAsync` | `(System.String)` | `MyApp.ApiClient.FetchAsync(string)` |
+| 17 | Array parameter | `MyApp.Processor` | `Process` | `(System.Byte[])` | `MyApp.Processor.Process(byte[])` |
+| 18 | ref/out parameters | `MyApp.Parser` | `TryGet` | `(System.String, System.Int32&)` | `MyApp.Parser.TryGet(string, out int)` |
+
+> **Implementation note:** The matching algorithm should normalize BOTH sides to a common
+> canonical form (e.g., always use CLR type names like `System.String`, use `.` for nested
+> types, strip generic arity markers) rather than trying to parse one format into the other.
+> A `MethodIdentityNormalizer` class should encapsulate this logic with separate
+> `NormalizeFromCobertura()` and `NormalizeFromRoslyn()` methods that produce the same
+> canonical string for equivalent methods.
 
 ### 6.3 Coverage Data Pipeline (Agent Workflow)
 
@@ -442,42 +481,69 @@ dotnet crap diff ./reports/before.json ./reports/after.json
 
 Test the CRAP formula against known values from the original crap4j:
 
-| Complexity | Coverage | Expected CRAP | Expected Load (threshold=30) |
-|---|---|---|---|
-| 1 | 1.0 | 1.0 | 0 |
-| 1 | 0.0 | 2.0 | 0 |
-| 5 | 0.0 | 30.0 | 0 (exactly at threshold) |
-| 6 | 0.0 | 42.0 | 6 |
-| 10 | 0.0 | 110.0 | 10 |
-| 10 | 0.42 | ~29.5 | 0 |
-| 30 | 1.0 | 30.0 | 0 (exactly at threshold) |
-| 30 | 0.0 | 930.0 | 31 |
+| Complexity | Coverage | Expected CRAP | CRAPpy? | Expected Load (threshold=30) |
+|---|---|---|---|---|
+| 1 | 1.0 | 1.0 | No | 0 |
+| 1 | 0.0 | 2.0 | No | 0 |
+| 5 | 0.0 | 30.0 | No (exactly at threshold, not over) | 0 |
+| 5 | 0.0 | 30.0 | No | 0 |
+| 6 | 0.0 | 42.0 | Yes | 6.2 |
+| 10 | 0.0 | 110.0 | Yes | 10.33 |
+| 10 | 0.42 | ~29.5 | No | 0 |
+| 30 | 1.0 | 30.0 | No (exactly at threshold, not over) | 0 |
+| 30 | 0.0 | 930.0 | Yes | 31.0 |
+| 31 | 1.0 | 31.0 | Yes (cannot be saved by coverage) | 1.03 |
+
+> **Threshold semantics:** CRAPpy is defined as `CRAP > threshold` (strictly greater than).
+> CRAP Load formula: `comp * (1 - cov) + comp / threshold`. The result is a `double`,
+> not truncated to `int` (diverges from original crap4j which used `(int)` cast).
 
 ### 7.2 Complexity Validation
 
 Test complexity walker against C# samples with known values:
 
 ```csharp
-// Expected complexity: 1
+// Expected complexity: 1 (no decisions)
 void SimpleMethod() { Console.WriteLine("hello"); }
 
-// Expected complexity: 2
+// Expected complexity: 2 (1 base + 1 if)
 void OneIf(bool x) { if (x) Console.WriteLine("yes"); }
 
-// Expected complexity: 4
+// Expected complexity: 3 (1 base + 1 if + 1 else-if)
+// NOTE: "else if" counts as one IfStatementSyntax — no double-counting
+void IfElseIf(int x) {
+    if (x > 0) Console.WriteLine("positive");
+    else if (x < 0) Console.WriteLine("negative");
+}
+
+// Expected complexity: 4 (1 base + 1 if + 2 &&)
+// NOTE: each && and || is a separate decision point
 void MultipleConditions(int x) {
+    if (x > 0 && x < 100 && x != 42) Console.WriteLine("in range");
+}
+
+// Expected complexity: 4 (1 base + 1 if + 1 && + 1 else-if)
+void ElseIfWithLogical(int x) {
     if (x > 0 && x < 100) Console.WriteLine("in range");
     else if (x < 0) Console.WriteLine("negative");
 }
 
-// Expected complexity: 6
-int SwitchMethod(int x) => x switch {
+// Expected complexity: 5 (1 base + 4 non-discard arms)
+// NOTE: only arms whose pattern is NOT DiscardPatternSyntax are counted
+int SwitchExpression(int x) => x switch {
     1 => 10,
     2 => 20,
     3 => 30,
     4 => 40,
-    _ => 0      // not counted (discard pattern)
-};              // 1 base + 4 non-default arms + 1 for switch = depends on config
+    _ => 0      // discard pattern — NOT counted
+};
+
+// Expected complexity: 4 (1 base + 3 non-discard arms, NO discard arm present)
+int SwitchNoDefault(int x) => x switch {
+    1 => 10,
+    2 => 20,
+    int n when n > 2 => 30,
+};
 ```
 
 ### 7.3 End-to-End Validation
