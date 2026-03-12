@@ -226,6 +226,53 @@ Each method MUST be uniquely identified by:
 - **Method signature** (parameter types for overload disambiguation)
 - **Full qualified method** (combined display string)
 
+### 6.4 Coverage-Complexity Data Join Behavior
+
+The CRAP calculator joins two data sets: complexity data (from source analysis) and coverage
+data (from test execution). These data sets may not align perfectly. The join rules are:
+
+#### 6.4.1 Join Semantics
+
+The join is a **left outer join from complexity to coverage**: every method found in source
+analysis produces a CRAP result, whether or not it has a matching coverage entry.
+
+| Source method has complexity? | Coverage entry exists? | Behavior |
+|---|---|---|
+| Yes | Yes | Normal: use both values to compute CRAP |
+| Yes | No | Use `coverage = 0.0` (uncovered). Emit `UNMATCHED_METHODS` warning |
+| No | Yes | **Ignore** the orphaned coverage entry. Emit `ORPHANED_COVERAGE` warning |
+| No | No | N/A — method does not exist |
+
+#### 6.4.2 Rationale
+
+- **Complexity without coverage** (most common mismatch): The method exists in source but has
+  no test coverage data. This typically means the method is untested. Treating it as 0.0
+  coverage is the safe, conservative default. The `coverage.defaultForUncovered` config option
+  allows overriding this (e.g., `null` to exclude from analysis), but the default MUST be `0.0`.
+
+- **Coverage without complexity** (orphaned coverage): The coverage XML references a method not
+  found in source analysis. This happens when:
+  - Coverage data is from a different version of the code than the source being analyzed
+  - The method was generated (source generators, compiler-generated state machines)
+  - The method was filtered out by exclude patterns or attribute filters
+
+  These entries are silently ignored (not included in results) with a diagnostic warning.
+
+- **Version mismatch detection**: If more than 20% of coverage entries are orphaned, the tool
+  SHOULD emit a `COVERAGE_STALE` warning suggesting the coverage data may be from a different
+  build than the source.
+
+#### 6.4.3 Join Test Scenarios
+
+| Scenario | Complexity methods | Coverage entries | Expected |
+|---|---|---|---|
+| Perfect match | A, B, C | A, B, C | All methods have real coverage |
+| Partial coverage | A, B, C | A, B | C gets coverage=0.0, warning |
+| No coverage file methods | A, B, C | (empty) | All get coverage=0.0, warning |
+| Extra coverage entries | A, B | A, B, C, D | C, D ignored, warning |
+| Complete mismatch | A, B | X, Y | A, B get 0.0; X, Y ignored; stale warning |
+| Empty source | (empty) | A, B | No results, `NO_METHODS_FOUND` error |
+
 ---
 
 ## 7. Report Format
