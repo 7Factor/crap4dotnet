@@ -43,9 +43,9 @@ decisions about code quality, refactoring priorities, and test coverage gaps.
 | **Threshold (default 30)** | Configurable constant | Configurable constant | Trivial |
 | **Aggregation statistics** | Mean, median, stddev, counts | Identical (use `MathNet.Numerics` or manual) | Low |
 | **Cobertura XML reading** | `CoberturaXMLReportReader` | Same XML format — Coverlet outputs Cobertura XML | Low |
-| **XML report output** | `CrapReportWriter` writes `<crap_result>` XML | Same schema, use `System.Xml.Linq` | Low |
+| **~~XML report output~~** | ~~`CrapReportWriter` writes `<crap_result>` XML~~ | **Removed** — no consumer for legacy XML. JSON-only output for AI agents. | N/A |
 | **Method-level granularity** | Methods identified by class + name + signature | Methods identified by type + name + signature | Low |
-| **Report output** | Jenkins `crap4j-plugin` reads XML reports | JSON primary format for agent consumption; XML optional | Low |
+| **Report output** | Jenkins `crap4j-plugin` reads XML reports | JSON-only format for agent consumption | Low |
 | **Histogram generation** | Distribution of scores across bins | Same logic | Low |
 | **CRAP diff / comparison** | `CrapDataComparer` in Jenkins plugin | Same algorithm | Low |
 

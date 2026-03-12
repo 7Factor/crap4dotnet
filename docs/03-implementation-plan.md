@@ -85,8 +85,6 @@ crap4dotnet/
 │   ├── Crap4DotNet.Reporting/            # Report generators (net8.0)
 │   │   ├── Json/
 │   │   │   └── JsonReportWriter.cs              # Primary: structured JSON for AI agents
-│   │   └── Xml/
-│   │       └── Crap4jXmlReportWriter.cs         # Optional: crap4j-compatible XML
 │   │
 │   └── Crap4DotNet.Cli/                  # CLI application (net8.0)
 │       ├── Program.cs                     # Entry point + System.CommandLine setup
@@ -208,7 +206,7 @@ crap4dotnet/
 
 **Deliverables:**
 1. `Crap4DotNet.Cli` — Global tool with `analyze` and `diff` commands
-2. `Crap4DotNet.Reporting` — JSON (primary) and XML (optional) output
+2. `Crap4DotNet.Reporting` — JSON output for AI agent consumption
 3. End-to-end tests running against sample projects
 
 **Tasks:**
@@ -220,7 +218,6 @@ crap4dotnet/
 - [ ] Implement `DiffCommand` with full diff schema (spec 10.2.1) and classification rules (spec 10.2.2)
 - [ ] Implement multi-project solution handling: single merged report (spec 6.5)
 - [ ] Implement coverage auto-discovery for solutions (spec 6.5.2)
-- [ ] Implement crap4j-compatible XML report writer (optional legacy format)
 - [ ] Package as `dotnet tool` with NuGet packaging
 - [ ] Write E2E tests: run `dotnet crap analyze` against sample project
 - [ ] Write diff command tests against all 9 test scenarios (spec 10.2.3)
@@ -236,7 +233,7 @@ crap4dotnet/
   All diagnostic messages and warnings go to **stderr**. This is the "agent-first" design —
   `dotnet crap analyze` is equivalent to `dotnet crap analyze --quiet --format json`.
 - **`--quiet` flag:** Suppresses all stderr output (warnings, progress). Only JSON to stdout.
-- **`--format json|xml`:** Selects output format. Default is `json`.
+- **`--format json`:** Output format. Only JSON is supported (XML legacy format removed — no consumer).
 - **`--output <path>`:** Write report to file instead of stdout. When specified, a brief
   human-readable summary is written to stdout (method count, CRAPpy count, exit status).
 - **Errors always go to stderr** as structured JSON (see spec section 8).

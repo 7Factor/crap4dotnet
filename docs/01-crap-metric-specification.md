@@ -566,11 +566,6 @@ The structure is optimized for programmatic parsing:
 > minor bumps add fields (backward-compatible), major bumps change or remove fields (breaking).
 > The diff report (section 10.2.1) uses the same `schemaVersion` field.
 
-### 7.2 XML Report Structure (Legacy Compatibility)
-
-An XML format following the original crap4j `<crap_result>` schema MAY be supported for
-interoperability with existing tooling that consumes crap4j reports.
-
 ---
 
 ## 8. Error Output Specification
