@@ -117,7 +117,13 @@ No special handling is needed for overflow. The tool MUST NOT use integer types 
 
 #### 2.4.5 Empty Projects
 
-When a project or solution has **zero analyzable methods** (after filtering):
+Two distinct scenarios produce zero methods, with different exit behavior:
+
+1. **No source files found at all** — the specified path does not contain any `.cs` files, or the `.csproj`/`.sln` resolves to no source. This is exit code `2` with error code `SOURCE_NOT_FOUND`. This is a genuine error: the user pointed the tool at the wrong target.
+
+2. **Source files found, but zero analyzable methods after filtering** — the source contains files, but all methods were excluded (e.g., project with only interfaces, abstract classes, or all methods filtered by `--filter`). This is exit code `0` with a `NO_ANALYZABLE_METHODS` warning. The analysis completed successfully; the result is a valid empty report.
+
+When the result is a valid empty report (case 2):
 - The `methods` array MUST be empty (`[]`)
 - `stats.methodCount` MUST be `0`
 - `stats.averageCrap` and `stats.medianCrap` MUST be `null` (not 0, not NaN)
@@ -472,7 +478,7 @@ analysis produces a CRAP result, whether or not it has a matching coverage entry
 | No coverage file methods | A, B, C | (empty) | All get coverage=0.0, warning |
 | Extra coverage entries | A, B | A, B, C, D | C, D ignored, warning |
 | Complete mismatch | A, B | X, Y | A, B get 0.0; X, Y ignored; stale warning |
-| Empty source | (empty) | A, B | No results, `NO_METHODS_FOUND` error |
+| Empty source | (empty) | A, B | No results, warning `NO_ANALYZABLE_METHODS` |
 
 ### 6.5 Multi-Project Solution Handling
 
@@ -594,7 +600,7 @@ This ensures AI agents can always parse error information programmatically.
 | `COVERAGE_FILE_NOT_FOUND` | 2 | The specified or auto-discovered coverage file does not exist |
 | `COVERAGE_PARSE_ERROR` | 2 | Coverage XML is malformed or uses an unsupported format |
 | `SOURCE_PARSE_ERROR` | 2 | C# source file has syntax errors preventing analysis |
-| `NO_METHODS_FOUND` | 2 | No analyzable methods found in the specified source |
+| `NO_SOURCE_FILES` | 2 | No `.cs` source files found in the specified path |
 | `INVALID_CONFIGURATION` | 2 | Configuration file or CLI flags contain invalid values |
 | `INVALID_THRESHOLD` | 2 | Threshold is <= 0 or not a valid number |
 | `DIFF_SCHEMA_MISMATCH` | 2 | Diff input files have incompatible schema versions |
@@ -632,6 +638,7 @@ Warnings do NOT change the exit code.
 | `ORPHANED_COVERAGE` | Coverage entries had no matching source method |
 | `COVERAGE_CLAMPED` | Coverage values outside 0.0-1.0 were clamped |
 | `EMPTY_NAMESPACE` | A namespace contained no analyzable methods after filtering |
+| `NO_ANALYZABLE_METHODS` | Source files found but all methods were excluded by filtering |
 
 ### 8.5 Error Handling Test Scenarios
 
@@ -641,7 +648,8 @@ Warnings do NOT change the exit code.
 | Missing coverage file | `--coverage /nonexistent.xml` | Exit 2, `COVERAGE_FILE_NOT_FOUND` |
 | Corrupt coverage XML | Truncated XML file | Exit 2, `COVERAGE_PARSE_ERROR` |
 | C# syntax errors | File with `class {{{` | Exit 2, `SOURCE_PARSE_ERROR` |
-| No methods after filtering | Project with only interfaces | Exit 2, `NO_METHODS_FOUND` |
+| No methods after filtering | Project with only interfaces | Exit 0, warning `NO_ANALYZABLE_METHODS` |
+| No source files at all | Empty directory or path with no `.cs` files | Exit 2, `NO_SOURCE_FILES` |
 | Threshold = 0 | `--threshold 0` | Exit 2, `INVALID_THRESHOLD` |
 | Threshold = -5 | `--threshold -5` | Exit 2, `INVALID_THRESHOLD` |
 | Diff with missing file | `dotnet crap diff a.json /missing.json` | Exit 2, `DIFF_FILE_NOT_FOUND` |
