@@ -168,6 +168,65 @@ A method is CRAPpy when `CRAP(m) > threshold`. A method exactly at the threshold
 | 31 – 60 | High (CRAPpy) | Refactor and/or add tests |
 | 60+ | Critical | Urgent refactoring required |
 
+#### 3.3.1 Severity Band Test Scenarios
+
+| CRAP Score | Expected Band | Expected Action |
+|---|---|---|
+| 1.0 | Low | No action needed |
+| 5.0 | Low | No action needed |
+| 5.01 | Moderate | Consider adding tests |
+| 10.0 | Moderate | Consider adding tests |
+| 15.0 | Moderate | Consider adding tests |
+| 15.01 | Elevated | Prioritize test coverage |
+| 30.0 | Elevated | Prioritize test coverage |
+| 30.01 | High (CRAPpy) | Refactor and/or add tests |
+| 45.0 | High (CRAPpy) | Refactor and/or add tests |
+| 60.0 | High (CRAPpy) | Refactor and/or add tests |
+| 60.01 | Critical | Urgent refactoring required |
+| 930.0 | Critical | Urgent refactoring required |
+
+> **Note:** Band boundaries are inclusive on the lower end. A score of exactly 5.0 is "Low";
+> 5.01 is "Moderate". The `severity` field appears in each method entry in the JSON report.
+
+### 3.4 CRAP Histogram
+
+A histogram SHOULD be generated showing the distribution of CRAP scores across configurable bins
+(default bins: 0-5, 5-10, 10-15, 15-20, 20-25, 25-30, 30-40, 40-50, 50-75, 75-100, 100+).
+
+#### 3.4.1 Histogram JSON Output
+
+```json
+{
+  "histogram": [
+    { "range": "0-5", "count": 45, "percent": 45.0 },
+    { "range": "5-10", "count": 20, "percent": 20.0 },
+    { "range": "10-15", "count": 12, "percent": 12.0 },
+    { "range": "15-20", "count": 8, "percent": 8.0 },
+    { "range": "20-25", "count": 5, "percent": 5.0 },
+    { "range": "25-30", "count": 3, "percent": 3.0 },
+    { "range": "30-40", "count": 4, "percent": 4.0 },
+    { "range": "40-50", "count": 1, "percent": 1.0 },
+    { "range": "50-75", "count": 1, "percent": 1.0 },
+    { "range": "75-100", "count": 1, "percent": 1.0 },
+    { "range": "100+", "count": 0, "percent": 0.0 }
+  ]
+}
+```
+
+> **Design note:** The histogram is included in the top-level JSON report alongside `stats`.
+> Bins use half-open intervals: `[0, 5)`, `[5, 10)`, ..., `[100, ∞)`. A method with CRAP
+> exactly 5.0 falls in the "5-10" bin.
+
+#### 3.4.2 Histogram Test Scenarios
+
+| Input CRAP scores | Expected bins with count > 0 |
+|---|---|
+| [1.0] | "0-5": 1 |
+| [5.0] | "5-10": 1 |
+| [1.0, 10.0, 30.0, 100.0] | "0-5": 1, "10-15": 1, "25-30": 1, "100+": 1 |
+| [] (empty) | All bins: 0 |
+| [30.01] | "30-40": 1 |
+
 ---
 
 ## 4. CRAP Load
@@ -284,11 +343,6 @@ post-processing the flat `methods` array.
 > **Design note:** The `hierarchy` object is included by default. Agents that only need
 > the flat `methods` array can ignore it. The `methods` array remains the canonical
 > source of per-method data; `hierarchy` provides pre-computed rollups for convenience.
-
-### 5.3 CRAP Histogram
-
-A histogram SHOULD be generated showing the distribution of CRAP scores across configurable bins
-(e.g., 0-5, 5-10, 10-15, 15-20, 20-25, 25-30, 30-40, 40-50, 50-75, 75-100, 100+).
 
 ---
 
