@@ -1,7 +1,7 @@
 # Implementation Plan: crap4dotnet
 
-> **Version:** 1.1
-> **Date:** 2026-03-11
+> **Version:** 1.2
+> **Date:** 2026-03-12
 > **Target Framework:** .NET 8+ (LTS)
 > **License:** MIT (matching open-source spirit of original crap4j)
 > **Target Consumer:** AI coding agents via CLI (no IDE/CI integrations)
@@ -171,11 +171,20 @@ crap4dotnet/
 - [ ] Implement `CrapLoadCalculator` with formula: `comp * (1-cov) + comp/threshold`
 - [ ] Implement `CrapStatistics` with all aggregation metrics
 - [ ] Implement `CyclomaticComplexityWalker` as a Roslyn `CSharpSyntaxWalker`
-- [ ] Implement `CoberturaCoverageReader` parsing Coverlet's output XML
-- [ ] Implement `MethodCoverageMatcher` in Core to join complexity and coverage data
+- [ ] Implement `CoberturaCoverageReader` with branch-rate preferred / line-rate fallback (spec 6.2)
+- [ ] Implement `MethodCoverageMatcher` in Core with left-outer-join semantics (spec 6.4)
 - [ ] Implement `MethodIdentityNormalizer` in Core with `NormalizeFromCobertura()` and `NormalizeFromRoslyn()`
+- [ ] Implement coverage clamping to [0.0, 1.0] and threshold validation >0 (spec 2.4)
+- [ ] Implement empty-project handling: null for averages, exit 0 (spec 2.4.5)
+- [ ] Implement severity band classification (spec 3.3)
+- [ ] Implement histogram generation with half-open interval bins (spec 3.4)
+- [ ] Handle local functions as separate methods (spec gap-analysis 5.3)
+- [ ] Handle partial methods: exclude declaration-only (spec gap-analysis 5.3)
+- [ ] Handle top-level statements: report as `Program.<Main>$` (spec gap-analysis 5.3)
 - [ ] Write comprehensive unit tests for formula edge cases
 - [ ] Write complexity walker tests against C# samples with known complexity
+- [ ] Write join behavior tests: partial/no/orphaned coverage (spec 6.4.3)
+- [ ] Write coverage field selection tests (spec 6.2 table)
 - [ ] Validate Cobertura reader against real Coverlet output
 
 **Key Design Decisions:**
@@ -204,16 +213,22 @@ crap4dotnet/
 
 **Tasks:**
 - [ ] Implement `AnalyzeCommand`: accept project/solution path + coverage file
-- [ ] Implement JSON report writer (primary output format for AI agents)
+- [ ] Implement JSON report writer with `schemaVersion: "1.0"` (spec 7.1)
+- [ ] Implement hierarchical aggregation in JSON output (spec 5.2.1)
+- [ ] Implement `warnings` array in JSON report (spec 8.3)
+- [ ] Implement structured error JSON to stderr (spec 8.1, 8.2)
+- [ ] Implement `DiffCommand` with full diff schema (spec 10.2.1) and classification rules (spec 10.2.2)
+- [ ] Implement multi-project solution handling: single merged report (spec 6.5)
+- [ ] Implement coverage auto-discovery for solutions (spec 6.5.2)
 - [ ] Implement crap4j-compatible XML report writer (optional legacy format)
-- [ ] Implement `DiffCommand`: compare two JSON reports, output delta
 - [ ] Package as `dotnet tool` with NuGet packaging
 - [ ] Write E2E tests: run `dotnet crap analyze` against sample project
+- [ ] Write diff command tests against all 9 test scenarios (spec 10.2.3)
+- [ ] Write error handling tests for all 10 error scenarios (spec 8.5)
 - [ ] Add `--threshold`, `--format`, `--output`, `--min-crap` CLI options
-- [ ] Add `--coverage` to specify coverage data path
-- [ ] Support auto-discovery: find `coverage.cobertura.xml` in `TestResults/`
+- [ ] Add `--coverage` to specify coverage data path (multiple allowed for solutions)
 - [ ] Implement exit codes: 0 = clean, 1 = CRAPpy methods found, 2 = error
-- [ ] Support `--quiet` flag (JSON to stdout only, no human-readable text)
+- [ ] Support `--quiet` flag (suppress stderr warnings/progress)
 - [ ] Support `--filter` for method name glob/regex matching
 
 **CLI Output Mode Defaults:**
