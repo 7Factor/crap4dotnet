@@ -20,10 +20,10 @@ public static class MethodCoverageMatcher
 
         foreach (var entry in coverageEntries)
         {
-            var fullKey = MethodIdentityNormalizer.NormalizeFromCobertura(entry);
+            var fullKey = CoberturaMethodParser.ToCanonicalKey(entry);
             AddToLookup(fullKeyLookup, fullKey, entry);
 
-            var nameKey = MethodIdentityNormalizer.GetNameOnlyKey(fullKey);
+            var nameKey = MethodKeyHelper.GetNameOnlyKey(fullKey);
             AddToLookup(nameKeyLookup, nameKey, entry);
         }
 
@@ -35,7 +35,7 @@ public static class MethodCoverageMatcher
 
         foreach (var complexity in complexityResults)
         {
-            var fullKey = MethodIdentityNormalizer.NormalizeFromRoslyn(complexity.Identity);
+            var fullKey = RoslynMethodParser.ToCanonicalKey(complexity.Identity);
 
             // Pass 1: Exact match on full canonical key (includes signature)
             if (fullKeyLookup.TryGetValue(fullKey, out var exactMatches))
@@ -50,7 +50,7 @@ public static class MethodCoverageMatcher
             }
 
             // Pass 2: Fallback to name-only key (without signature)
-            var nameKey = MethodIdentityNormalizer.GetNameOnlyKey(fullKey);
+            var nameKey = MethodKeyHelper.GetNameOnlyKey(fullKey);
             if (nameKeyLookup.TryGetValue(nameKey, out var nameMatches) && nameMatches.Count == 1)
             {
                 matchedNameKeys.Add(nameKey);
@@ -81,7 +81,7 @@ public static class MethodCoverageMatcher
                 continue;
 
             // Check if matched by name-only fallback
-            var nameKey = MethodIdentityNormalizer.GetNameOnlyKey(kvp.Key);
+            var nameKey = MethodKeyHelper.GetNameOnlyKey(kvp.Key);
             if (matchedNameKeys.Contains(nameKey))
                 continue;
 

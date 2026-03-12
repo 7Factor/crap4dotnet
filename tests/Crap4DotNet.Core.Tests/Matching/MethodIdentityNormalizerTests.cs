@@ -45,7 +45,7 @@ public sealed class MethodIdentityNormalizerTests
     public void Roslyn_SimpleMethod()
     {
         var identity = MakeRoslynIdentity();
-        MethodIdentityNormalizer.NormalizeFromRoslyn(identity)
+        RoslynMethodParser.ToCanonicalKey(identity)
             .Should().Be("MyApp.Service.DoWork()");
     }
 
@@ -53,7 +53,7 @@ public sealed class MethodIdentityNormalizerTests
     public void Roslyn_MethodWithParams()
     {
         var identity = MakeRoslynIdentity(signature: "(string, int)");
-        MethodIdentityNormalizer.NormalizeFromRoslyn(identity)
+        RoslynMethodParser.ToCanonicalKey(identity)
             .Should().Be("MyApp.Service.DoWork(string, int)");
     }
 
@@ -65,7 +65,7 @@ public sealed class MethodIdentityNormalizerTests
             methodName: "Get",
             signature: "(string)",
             fullName: "MyApp.Cache<T>.Get(string)");
-        MethodIdentityNormalizer.NormalizeFromRoslyn(identity)
+        RoslynMethodParser.ToCanonicalKey(identity)
             .Should().Be("MyApp.Cache<>.Get(string)");
     }
 
@@ -76,7 +76,7 @@ public sealed class MethodIdentityNormalizerTests
             methodName: "Find<T>",
             signature: "(string)",
             fullName: "MyApp.Service.Find<T>(string)");
-        MethodIdentityNormalizer.NormalizeFromRoslyn(identity)
+        RoslynMethodParser.ToCanonicalKey(identity)
             .Should().Be("MyApp.Service.Find<>(string)");
     }
 
@@ -88,7 +88,7 @@ public sealed class MethodIdentityNormalizerTests
             methodName: "Add",
             signature: "(string, int)",
             fullName: "MyApp.Dict<TKey, TValue>.Add(string, int)");
-        MethodIdentityNormalizer.NormalizeFromRoslyn(identity)
+        RoslynMethodParser.ToCanonicalKey(identity)
             .Should().Be("MyApp.Dict<,>.Add(string, int)");
     }
 
@@ -99,7 +99,7 @@ public sealed class MethodIdentityNormalizerTests
             methodName: "Value.get",
             signature: "",
             fullName: "MyApp.Service.Value.get");
-        MethodIdentityNormalizer.NormalizeFromRoslyn(identity)
+        RoslynMethodParser.ToCanonicalKey(identity)
             .Should().Be("MyApp.Service.Value.get()");
     }
 
@@ -111,7 +111,7 @@ public sealed class MethodIdentityNormalizerTests
             methodName: "Run",
             signature: "()",
             fullName: "MyApp.Outer.Inner.Run()");
-        MethodIdentityNormalizer.NormalizeFromRoslyn(identity)
+        RoslynMethodParser.ToCanonicalKey(identity)
             .Should().Be("MyApp.Outer.Inner.Run()");
     }
 
@@ -122,7 +122,7 @@ public sealed class MethodIdentityNormalizerTests
             methodName: "Service",
             signature: "(string)",
             fullName: "MyApp.Service.Service(string)");
-        MethodIdentityNormalizer.NormalizeFromRoslyn(identity)
+        RoslynMethodParser.ToCanonicalKey(identity)
             .Should().Be("MyApp.Service.Service(string)");
     }
 
@@ -132,7 +132,7 @@ public sealed class MethodIdentityNormalizerTests
     public void Cobertura_SimpleMethod()
     {
         var cov = MakeCobertura();
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Service.DoWork()");
     }
 
@@ -140,7 +140,7 @@ public sealed class MethodIdentityNormalizerTests
     public void Cobertura_PrimitiveTypes_Normalized()
     {
         var cov = MakeCobertura(signature: "(System.String, System.Int32)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Service.DoWork(string, int)");
     }
 
@@ -148,7 +148,7 @@ public sealed class MethodIdentityNormalizerTests
     public void Cobertura_AllPrimitiveTypes()
     {
         var cov = MakeCobertura(signature: "(System.Boolean, System.Int64, System.Double, System.Decimal)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Service.DoWork(bool, long, double, decimal)");
     }
 
@@ -159,7 +159,7 @@ public sealed class MethodIdentityNormalizerTests
             className: "MyApp.Cache`1",
             methodName: "Get",
             signature: "(System.String)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Cache<>.Get(string)");
     }
 
@@ -169,7 +169,7 @@ public sealed class MethodIdentityNormalizerTests
         var cov = MakeCobertura(
             methodName: "Find`1",
             signature: "(System.String)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Service.Find<>(string)");
     }
 
@@ -180,7 +180,7 @@ public sealed class MethodIdentityNormalizerTests
             className: "MyApp.Dict`2",
             methodName: "Add",
             signature: "(System.String, System.Int32)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Dict<,>.Add(string, int)");
     }
 
@@ -191,7 +191,7 @@ public sealed class MethodIdentityNormalizerTests
             className: "MyApp.Outer/Inner",
             methodName: "Run",
             signature: "()");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Outer.Inner.Run()");
     }
 
@@ -202,7 +202,7 @@ public sealed class MethodIdentityNormalizerTests
             className: "MyApp.Service",
             methodName: ".ctor",
             signature: "(System.String)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Service.Service(string)");
     }
 
@@ -213,7 +213,7 @@ public sealed class MethodIdentityNormalizerTests
             className: "MyApp.Cache`1",
             methodName: ".ctor",
             signature: "(System.Int32)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Cache<>.Cache(int)");
     }
 
@@ -223,7 +223,7 @@ public sealed class MethodIdentityNormalizerTests
         var cov = MakeCobertura(
             methodName: "get_Value",
             signature: "()");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Service.Value.get()");
     }
 
@@ -233,7 +233,7 @@ public sealed class MethodIdentityNormalizerTests
         var cov = MakeCobertura(
             methodName: "set_Value",
             signature: "(System.Int32)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Service.Value.set(int)");
     }
 
@@ -244,7 +244,7 @@ public sealed class MethodIdentityNormalizerTests
             className: "MyApp.Number",
             methodName: "op_Addition",
             signature: "(MyApp.Number, MyApp.Number)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Number.operator +(Number, Number)");
     }
 
@@ -255,7 +255,7 @@ public sealed class MethodIdentityNormalizerTests
             className: "MyApp.Value",
             methodName: "op_Equality",
             signature: "(MyApp.Value, MyApp.Value)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Value.operator ==(Value, Value)");
     }
 
@@ -264,7 +264,7 @@ public sealed class MethodIdentityNormalizerTests
     {
         var cov = MakeCobertura(
             signature: "(System.Collections.Generic.List`1<System.String>)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Service.DoWork(List<string>)");
     }
 
@@ -273,7 +273,7 @@ public sealed class MethodIdentityNormalizerTests
     {
         var cov = MakeCobertura(
             signature: "(System.Nullable`1<System.Int32>)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Service.DoWork(int?)");
     }
 
@@ -281,7 +281,7 @@ public sealed class MethodIdentityNormalizerTests
     public void Cobertura_ArrayType()
     {
         var cov = MakeCobertura(signature: "(System.String[])");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Service.DoWork(string[])");
     }
 
@@ -289,7 +289,7 @@ public sealed class MethodIdentityNormalizerTests
     public void Cobertura_ByRefType()
     {
         var cov = MakeCobertura(signature: "(System.Int32&)");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Service.DoWork(ref int)");
     }
 
@@ -297,7 +297,7 @@ public sealed class MethodIdentityNormalizerTests
     public void Cobertura_EmptySignature()
     {
         var cov = MakeCobertura(signature: "");
-        MethodIdentityNormalizer.NormalizeFromCobertura(cov)
+        CoberturaMethodParser.ToCanonicalKey(cov)
             .Should().Be("MyApp.Service.DoWork()");
     }
 
@@ -306,9 +306,9 @@ public sealed class MethodIdentityNormalizerTests
     [Fact]
     public void Match_SimpleMethod()
     {
-        var roslyn = MethodIdentityNormalizer.NormalizeFromRoslyn(
+        var roslyn = RoslynMethodParser.ToCanonicalKey(
             MakeRoslynIdentity());
-        var cobertura = MethodIdentityNormalizer.NormalizeFromCobertura(
+        var cobertura = CoberturaMethodParser.ToCanonicalKey(
             MakeCobertura());
         roslyn.Should().Be(cobertura);
     }
@@ -316,9 +316,9 @@ public sealed class MethodIdentityNormalizerTests
     [Fact]
     public void Match_MethodWithPrimitiveParams()
     {
-        var roslyn = MethodIdentityNormalizer.NormalizeFromRoslyn(
+        var roslyn = RoslynMethodParser.ToCanonicalKey(
             MakeRoslynIdentity(signature: "(string, int)"));
-        var cobertura = MethodIdentityNormalizer.NormalizeFromCobertura(
+        var cobertura = CoberturaMethodParser.ToCanonicalKey(
             MakeCobertura(signature: "(System.String, System.Int32)"));
         roslyn.Should().Be(cobertura);
     }
@@ -326,13 +326,13 @@ public sealed class MethodIdentityNormalizerTests
     [Fact]
     public void Match_GenericType()
     {
-        var roslyn = MethodIdentityNormalizer.NormalizeFromRoslyn(
+        var roslyn = RoslynMethodParser.ToCanonicalKey(
             MakeRoslynIdentity(
                 className: "Cache<T>",
                 methodName: "Get",
                 signature: "(string)",
                 fullName: "MyApp.Cache<T>.Get(string)"));
-        var cobertura = MethodIdentityNormalizer.NormalizeFromCobertura(
+        var cobertura = CoberturaMethodParser.ToCanonicalKey(
             MakeCobertura(
                 className: "MyApp.Cache`1",
                 methodName: "Get",
@@ -343,12 +343,12 @@ public sealed class MethodIdentityNormalizerTests
     [Fact]
     public void Match_GenericMethod()
     {
-        var roslyn = MethodIdentityNormalizer.NormalizeFromRoslyn(
+        var roslyn = RoslynMethodParser.ToCanonicalKey(
             MakeRoslynIdentity(
                 methodName: "Find<T>",
                 signature: "(string)",
                 fullName: "MyApp.Service.Find<T>(string)"));
-        var cobertura = MethodIdentityNormalizer.NormalizeFromCobertura(
+        var cobertura = CoberturaMethodParser.ToCanonicalKey(
             MakeCobertura(
                 methodName: "Find`1",
                 signature: "(System.String)"));
@@ -358,12 +358,12 @@ public sealed class MethodIdentityNormalizerTests
     [Fact]
     public void Match_Constructor()
     {
-        var roslyn = MethodIdentityNormalizer.NormalizeFromRoslyn(
+        var roslyn = RoslynMethodParser.ToCanonicalKey(
             MakeRoslynIdentity(
                 methodName: "Service",
                 signature: "(string)",
                 fullName: "MyApp.Service.Service(string)"));
-        var cobertura = MethodIdentityNormalizer.NormalizeFromCobertura(
+        var cobertura = CoberturaMethodParser.ToCanonicalKey(
             MakeCobertura(
                 methodName: ".ctor",
                 signature: "(System.String)"));
@@ -373,13 +373,13 @@ public sealed class MethodIdentityNormalizerTests
     [Fact]
     public void Match_NestedType()
     {
-        var roslyn = MethodIdentityNormalizer.NormalizeFromRoslyn(
+        var roslyn = RoslynMethodParser.ToCanonicalKey(
             MakeRoslynIdentity(
                 className: "Outer.Inner",
                 methodName: "Run",
                 signature: "()",
                 fullName: "MyApp.Outer.Inner.Run()"));
-        var cobertura = MethodIdentityNormalizer.NormalizeFromCobertura(
+        var cobertura = CoberturaMethodParser.ToCanonicalKey(
             MakeCobertura(
                 className: "MyApp.Outer/Inner",
                 methodName: "Run",
@@ -390,12 +390,12 @@ public sealed class MethodIdentityNormalizerTests
     [Fact]
     public void Match_PropertyGetter()
     {
-        var roslyn = MethodIdentityNormalizer.NormalizeFromRoslyn(
+        var roslyn = RoslynMethodParser.ToCanonicalKey(
             MakeRoslynIdentity(
                 methodName: "Value.get",
                 signature: "",
                 fullName: "MyApp.Service.Value.get"));
-        var cobertura = MethodIdentityNormalizer.NormalizeFromCobertura(
+        var cobertura = CoberturaMethodParser.ToCanonicalKey(
             MakeCobertura(
                 methodName: "get_Value",
                 signature: "()"));
@@ -407,21 +407,21 @@ public sealed class MethodIdentityNormalizerTests
     [Fact]
     public void NameOnlyKey_StripsSignature()
     {
-        MethodIdentityNormalizer.GetNameOnlyKey("MyApp.Service.DoWork(string, int)")
+        MethodKeyHelper.GetNameOnlyKey("MyApp.Service.DoWork(string, int)")
             .Should().Be("MyApp.Service.DoWork");
     }
 
     [Fact]
     public void NameOnlyKey_EmptyParens()
     {
-        MethodIdentityNormalizer.GetNameOnlyKey("MyApp.Service.DoWork()")
+        MethodKeyHelper.GetNameOnlyKey("MyApp.Service.DoWork()")
             .Should().Be("MyApp.Service.DoWork");
     }
 
     [Fact]
     public void NameOnlyKey_NoParens_ReturnsAsIs()
     {
-        MethodIdentityNormalizer.GetNameOnlyKey("MyApp.Service.DoWork")
+        MethodKeyHelper.GetNameOnlyKey("MyApp.Service.DoWork")
             .Should().Be("MyApp.Service.DoWork");
     }
 }
