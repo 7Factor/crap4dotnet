@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Diagnostics;
 using Crap4DotNet.Core.Analysis;
 using Crap4DotNet.Core.Configuration;
 using Crap4DotNet.Core.Coverage;
@@ -18,6 +19,7 @@ internal static class AnalyzeCommand
         var thresholdOpt = new Option<int>("--threshold", () => 30, "CRAP threshold (default: 30)");
         var outputOpt = new Option<string?>("--output", "Write JSON to file instead of stdout");
         var minCrapOpt = new Option<double?>("--min-crap", "Only include methods with CRAP >= this value");
+        var runTestsOpt = new Option<bool>("--run-tests", "Run dotnet test to generate coverage before analysis");
 
         var command = new Command("analyze", "Analyze source code for CRAP metrics")
         {
@@ -25,10 +27,11 @@ internal static class AnalyzeCommand
             coverageOpt,
             thresholdOpt,
             outputOpt,
-            minCrapOpt
+            minCrapOpt,
+            runTestsOpt
         };
 
-        command.SetHandler(Execute, pathArg, coverageOpt, thresholdOpt, outputOpt, minCrapOpt);
+        command.SetHandler(Execute, pathArg, coverageOpt, thresholdOpt, outputOpt, minCrapOpt, runTestsOpt);
         return command;
     }
 
@@ -37,8 +40,27 @@ internal static class AnalyzeCommand
         string[] coveragePaths,
         int threshold,
         string? outputPath,
-        double? minCrap)
+        double? minCrap,
+        bool runTests)
     {
+        // Validate --run-tests and --coverage are mutually exclusive
+        if (runTests && coveragePaths.Length > 0)
+        {
+            ErrorOutput.WriteError("INVALID_CONFIGURATION",
+                "--run-tests and --coverage are mutually exclusive. Use one or the other.");
+            Environment.ExitCode = 2;
+            return;
+        }
+
+        // Validate --run-tests requires a project-level path
+        if (runTests && path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+        {
+            ErrorOutput.WriteError("INVALID_CONFIGURATION",
+                "--run-tests requires a .csproj, .sln, or directory path, not a .cs file.");
+            Environment.ExitCode = 2;
+            return;
+        }
+
         // Validate threshold
         if (threshold <= 0)
         {
@@ -73,17 +95,32 @@ internal static class AnalyzeCommand
             return;
         }
 
-        // Resolve coverage files
+        // Run tests to generate coverage if requested
         List<string> resolvedCoveragePaths;
-        try
+        if (runTests)
         {
-            resolvedCoveragePaths = ResolveCoveragePaths(coveragePaths, path);
+            var testCoveragePaths = RunTests(path);
+            if (testCoveragePaths is null)
+            {
+                // RunTests already wrote error output
+                Environment.ExitCode = 2;
+                return;
+            }
+            resolvedCoveragePaths = testCoveragePaths;
         }
-        catch (CrapCliException ex)
+        else
         {
-            ErrorOutput.WriteError(ex.Code, ex.Message, file: ex.FilePath);
-            Environment.ExitCode = 2;
-            return;
+            // Resolve coverage files
+            try
+            {
+                resolvedCoveragePaths = ResolveCoveragePaths(coveragePaths, path);
+            }
+            catch (CrapCliException ex)
+            {
+                ErrorOutput.WriteError(ex.Code, ex.Message, file: ex.FilePath);
+                Environment.ExitCode = 2;
+                return;
+            }
         }
 
         // Read coverage data
@@ -143,6 +180,87 @@ internal static class AnalyzeCommand
 
         // Exit code: 1 if any method is CRAPpy, 0 otherwise
         Environment.ExitCode = result.Data.Stats.CrappyMethodCount > 0 ? 1 : 0;
+    }
+
+    private static List<string>? RunTests(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+
+        // Determine the target for dotnet test
+        string target;
+        if (fullPath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase)
+            || fullPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+        {
+            target = fullPath;
+        }
+        else if (Directory.Exists(fullPath))
+        {
+            target = fullPath;
+        }
+        else
+        {
+            ErrorOutput.WriteError("INVALID_CONFIGURATION",
+                $"--run-tests requires a .csproj, .sln, or directory path: {path}");
+            return null;
+        }
+
+        var resultsDir = Path.Combine(
+            Directory.Exists(fullPath) ? fullPath : Path.GetDirectoryName(fullPath) ?? ".",
+            "TestResults",
+            $"crap-{Guid.NewGuid():N}");
+
+        var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = $"test \"{target}\" --collect:\"XPlat Code Coverage\" --results-directory \"{resultsDir}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            }
+        };
+
+        process.Start();
+        var stdout = process.StandardOutput.ReadToEnd();
+        var stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
+        {
+            // Forward test output so the user can see what failed
+            if (!string.IsNullOrWhiteSpace(stdout))
+                Console.Error.Write(stdout);
+            if (!string.IsNullOrWhiteSpace(stderr))
+                Console.Error.Write(stderr);
+
+            ErrorOutput.WriteError("TEST_FAILURE",
+                $"dotnet test exited with code {process.ExitCode}. Fix failing tests and retry.");
+            return null;
+        }
+
+        // Find generated coverage files
+        if (!Directory.Exists(resultsDir))
+        {
+            ErrorOutput.WriteError("COVERAGE_FILE_NOT_FOUND",
+                "dotnet test completed but no TestResults directory was created. Is the coverlet collector installed?",
+                file: resultsDir);
+            return null;
+        }
+
+        var coverageFiles = Directory.GetFiles(resultsDir, "coverage.cobertura.xml", SearchOption.AllDirectories)
+            .ToList();
+
+        if (coverageFiles.Count == 0)
+        {
+            ErrorOutput.WriteError("COVERAGE_FILE_NOT_FOUND",
+                "dotnet test completed but no coverage.cobertura.xml was generated. "
+                + "Ensure the coverlet.collector NuGet package is referenced in your test project(s).",
+                file: resultsDir);
+            return null;
+        }
+
+        return coverageFiles;
     }
 
     private static (List<string> files, string projectName) ResolveSourceFiles(string path)

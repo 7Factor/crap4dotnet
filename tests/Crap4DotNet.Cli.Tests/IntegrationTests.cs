@@ -538,6 +538,40 @@ public sealed class IntegrationTests : IDisposable
             .Should().Be("COVERAGE_PARSE_ERROR"); // reuses the parse error code
     }
 
+    // === --run-tests flag ===
+
+    [Fact]
+    public void Error_RunTestsAndCoverage_MutuallyExclusive()
+    {
+        var sourcePath = CreateFile("Simple.cs",
+            "namespace MyApp; public class Simple { public void M() {} }");
+        var coveragePath = CreateFile("coverage.cobertura.xml", CoberturaCoverageXml);
+
+        var (exitCode, _, stderr) = InvokeAnalyze(
+            sourcePath, "--coverage", coveragePath, "--run-tests");
+
+        exitCode.Should().Be(2);
+        var error = JsonDocument.Parse(stderr);
+        error.RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("INVALID_CONFIGURATION");
+        stderr.Should().Contain("mutually exclusive");
+    }
+
+    [Fact]
+    public void Error_RunTestsWithCsFile()
+    {
+        var sourcePath = CreateFile("Simple.cs",
+            "namespace MyApp; public class Simple { public void M() {} }");
+
+        var (exitCode, _, stderr) = InvokeAnalyze(sourcePath, "--run-tests");
+
+        exitCode.Should().Be(2);
+        var error = JsonDocument.Parse(stderr);
+        error.RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("INVALID_CONFIGURATION");
+        stderr.Should().Contain(".cs file");
+    }
+
     // === JSON schema validation ===
 
     [Fact]
