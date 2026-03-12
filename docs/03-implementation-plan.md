@@ -204,6 +204,12 @@ crap4dotnet/
 
 **Goal:** Working `dotnet crap` CLI tool that AI agents can invoke and parse.
 
+> **Orchestration ownership:** The CLI layer (`Program.cs` / `AnalyzeCommand`) owns the
+> full analysis pipeline: parse source → compute complexity → read coverage → match methods
+> → calculate CRAP → generate report. There is no separate `AnalysisPipeline` abstraction.
+> This is deliberate: the pipeline is a straight-line sequence with no branching or reuse
+> outside the CLI. Manual composition in `Program.cs` wires the components together directly.
+
 **Deliverables:**
 1. `Crap4DotNet.Cli` — Global tool with `analyze` and `diff` commands
 2. `Crap4DotNet.Reporting` — JSON output for AI agent consumption
