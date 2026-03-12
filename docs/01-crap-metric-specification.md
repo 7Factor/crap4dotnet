@@ -343,6 +343,40 @@ analysis produces a CRAP result, whether or not it has a matching coverage entry
 | Complete mismatch | A, B | X, Y | A, B get 0.0; X, Y ignored; stale warning |
 | Empty source | (empty) | A, B | No results, `NO_METHODS_FOUND` error |
 
+### 6.5 Multi-Project Solution Handling
+
+When the tool is given a `.sln` (solution) file, it analyzes all non-test projects in the
+solution and produces a **single merged report**.
+
+#### 6.5.1 Behavior
+
+1. **Source analysis**: All `.cs` files from all non-test projects in the solution are analyzed.
+   Test projects (those referencing `Microsoft.NET.Test.Sdk` or containing `xunit`/`nunit`/`mstest`
+   package references) are excluded from analysis by default.
+2. **Coverage merging**: If multiple `--coverage` files are specified, or if auto-discovery finds
+   multiple coverage files, all coverage data is merged into a single lookup. If the same method
+   appears in multiple coverage files, the **highest coverage value** is used (best-case from
+   any test project).
+3. **Single report**: The output is one JSON report with all methods from all projects. The
+   `hierarchy` section groups by namespace (which naturally separates projects since .NET projects
+   typically use distinct root namespaces).
+4. **Project field**: The top-level `project` field uses the solution name (without `.sln`).
+
+#### 6.5.2 Coverage Auto-Discovery for Solutions
+
+When `--coverage` is not specified, the tool searches for coverage files:
+```
+<solution-dir>/**/TestResults/**/coverage.cobertura.xml
+```
+
+All matching files are merged. If no files are found, exit with `COVERAGE_FILE_NOT_FOUND`.
+
+#### 6.5.3 Design Rationale
+
+A single merged report (rather than per-project reports) is simpler for AI agents to consume —
+one JSON document, one exit code, one set of stats. Agents that need per-project breakdown can
+use the `hierarchy.namespaces` grouping or filter the `methods` array by namespace prefix.
+
 ---
 
 ## 7. Report Format
