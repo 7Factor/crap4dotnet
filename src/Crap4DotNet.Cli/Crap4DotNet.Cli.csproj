@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Crap4DotNet.Cli</RootNamespace>
+    <AssemblyName>dotnet-crap</AssemblyName>
+    <Description>CLI tool for computing CRAP scores on .NET projects</Description>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>dotnet-crap</ToolCommandName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+    <PackageReference Include="System.Text.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Crap4DotNet.Core\Crap4DotNet.Core.csproj" />
+  </ItemGroup>
+
+</Project>

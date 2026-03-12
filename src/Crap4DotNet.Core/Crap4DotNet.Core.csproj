@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Crap4DotNet.Core</RootNamespace>
+    <AssemblyName>Crap4DotNet.Core</AssemblyName>
+    <Description>CRAP metric analysis engine: formula, complexity, coverage, matching</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+
+</Project>
