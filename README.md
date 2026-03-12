@@ -1,5 +1,8 @@
 # crap4dotnet
 
+[![NuGet](https://img.shields.io/nuget/v/Crap4DotNet)](https://www.nuget.org/packages/Crap4DotNet)
+[![CI](https://github.com/7Factor/crap4dotnet/actions/workflows/ci.yml/badge.svg)](https://github.com/7Factor/crap4dotnet/actions/workflows/ci.yml)
+
 A .NET global tool that computes **CRAP (Change Risk Anti-Patterns)** scores for your C# code. CRAP combines cyclomatic complexity with code coverage to identify methods that are both complex and poorly tested — the riskiest code in your project.
 
 Designed for **AI agent consumption**: JSON to stdout, structured errors to stderr, meaningful exit codes.
