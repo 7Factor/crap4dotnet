@@ -129,12 +129,24 @@ crap4dotnet/
 | Package | Purpose | Version |
 |---|---|---|
 | `Microsoft.CodeAnalysis.CSharp` | Roslyn compiler APIs for syntax-tree analysis | 4.x (latest stable) |
-| `System.CommandLine` | CLI argument parsing | 2.x |
+| `System.CommandLine` | CLI argument parsing | 2.x (or `System.CommandLine.DragonFruit` if simpler) |
 | `System.Text.Json` | JSON serialization | Built-in (.NET 8) |
 
 > **Minimal dependency footprint.** No commercial dependencies. Statistical calculations
 > (median, stddev) will be implemented directly — they are simple enough to avoid pulling
 > in MathNet.Numerics for just two functions.
+
+> **No DI container.** The CLI uses manual composition ("poor-man's DI") in `Program.cs`.
+> All dependencies are constructed explicitly and wired together at the composition root.
+> This means:
+> - No `Microsoft.Extensions.DependencyInjection` dependency
+> - Faster startup (no container reflection/scanning)
+> - Easier to understand the object graph
+> - Interfaces (`IComplexityAnalyzer`, `ICoverageReader`, `IReportWriter`) are still used
+>   for testability and swappability — they're just constructed manually, not registered
+>   in a container.
+>
+> This is the right choice for a CLI tool that constructs its object graph once per run.
 
 ---
 
