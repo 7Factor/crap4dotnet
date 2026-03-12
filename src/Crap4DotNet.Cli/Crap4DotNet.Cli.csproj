@@ -10,6 +10,9 @@
     <Description>CLI tool for computing CRAP (Change Risk Anti-Patterns) scores on .NET projects. Combines cyclomatic complexity with code coverage to identify risky, under-tested methods.</Description>
     <PackageTags>crap;metrics;code-quality;complexity;coverage;dotnet-tool</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/7Factor/crap4dotnet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/7Factor/crap4dotnet</PackageProjectUrl>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>dotnet-crap</ToolCommandName>
     <PackageReadmeFile>README.md</PackageReadmeFile>
