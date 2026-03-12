@@ -48,10 +48,14 @@
 
 ## 2. Project Structure
 
+> **Design decision:** Collapsed from 5 projects to 3. The original Complexity, Coverage, and
+> Reporting projects each had 1-2 public types — not enough to justify separate assemblies.
+> Fewer projects = simpler build, faster tests, less ceremony.
+
 ```
 crap4dotnet/
 ├── src/
-│   ├── Crap4DotNet.Core/                  # Core library (netstandard2.0 + net8.0)
+│   ├── Crap4DotNet.Core/                  # All analysis logic (net8.0)
 │   │   ├── Models/
 │   │   │   ├── MethodIdentity.cs          # Fully-qualified method identification
 │   │   │   ├── MethodCrapData.cs          # CRAP score, load, complexity, coverage per method
@@ -67,27 +71,16 @@ crap4dotnet/
 │   │   ├── Matching/
 │   │   │   ├── MethodCoverageMatcher.cs   # Join complexity + coverage by method identity
 │   │   │   └── MethodIdentityNormalizer.cs # Normalize Cobertura/Roslyn names to canonical form
-│   │   └── Abstractions/
-│   │       ├── IComplexityAnalyzer.cs      # Interface for complexity providers
-│   │       ├── ICoverageReader.cs          # Interface for coverage data providers
-│   │       └── IReportWriter.cs            # Interface for report output
-│   │
-│   ├── Crap4DotNet.Complexity/            # Complexity analysis (net8.0)
-│   │   ├── Roslyn/
+│   │   ├── Complexity/
 │   │   │   ├── CyclomaticComplexityWalker.cs    # SyntaxWalker counting decision points
 │   │   │   └── MethodDiscovery.cs               # Find all methods in a compilation
-│   │   └── RoslynComplexityAnalyzer.cs          # IComplexityAnalyzer implementation
-│   │
-│   ├── Crap4DotNet.Coverage/             # Coverage data readers (net8.0)
-│   │   └── Cobertura/
-│   │       └── CoberturaCoverageReader.cs       # Parse coverage.cobertura.xml
-│   │
-│   ├── Crap4DotNet.Reporting/            # Report generators (net8.0)
-│   │   ├── Json/
-│   │   │   └── JsonReportWriter.cs              # Primary: structured JSON for AI agents
+│   │   ├── Coverage/
+│   │   │   └── CoberturaCoverageReader.cs       # Parse coverage.cobertura.xml
+│   │   └── Reporting/
+│   │       └── JsonReportWriter.cs              # Structured JSON for AI agents
 │   │
 │   └── Crap4DotNet.Cli/                  # CLI application (net8.0)
-│       ├── Program.cs                     # Entry point + System.CommandLine setup
+│       ├── Program.cs                     # Entry point + manual composition
 │       ├── Commands/
 │       │   ├── AnalyzeCommand.cs          # Main analysis command
 │       │   └── DiffCommand.cs             # Compare two JSON reports
@@ -97,14 +90,12 @@ crap4dotnet/
 │   ├── Crap4DotNet.Core.Tests/
 │   │   ├── CrapCalculatorTests.cs         # Formula validation with known values
 │   │   ├── CrapLoadCalculatorTests.cs
-│   │   └── CrapStatisticsTests.cs
-│   ├── Crap4DotNet.Complexity.Tests/
+│   │   ├── CrapStatisticsTests.cs
 │   │   ├── CyclomaticComplexityWalkerTests.cs   # Test against known C# samples
-│   │   └── Samples/                              # C# files with known complexity
-│   ├── Crap4DotNet.Coverage.Tests/
 │   │   ├── CoberturaCoverageReaderTests.cs
+│   │   ├── JsonReportWriterTests.cs
+│   │   ├── Samples/                              # C# files with known complexity
 │   │   └── TestData/                              # Sample coverage XML files
-│   ├── Crap4DotNet.Reporting.Tests/
 │   └── Crap4DotNet.Cli.Tests/
 │       └── EndToEndTests.cs                       # Full pipeline integration tests
 │
@@ -157,10 +148,8 @@ crap4dotnet/
 **Goal:** Calculate CRAP scores for a single C# project given pre-existing coverage data.
 
 **Deliverables:**
-1. `Crap4DotNet.Core` — Models, CRAP formula, CRAP Load formula, statistics
-2. `Crap4DotNet.Complexity` — Roslyn cyclomatic complexity walker
-3. `Crap4DotNet.Coverage` — Cobertura XML reader
-4. Unit tests validating formula against known crap4j outputs
+1. `Crap4DotNet.Core` — Models, CRAP formula, CRAP Load, statistics, complexity walker, coverage reader, matching, JSON writer
+2. Unit tests validating formula, complexity walker, and coverage reader against known values
 
 **Tasks:**
 - [ ] Set up solution structure with `Directory.Build.props`
