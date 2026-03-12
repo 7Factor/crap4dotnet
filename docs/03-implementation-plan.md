@@ -192,6 +192,16 @@ crap4dotnet/
 - [ ] Support `--quiet` flag (JSON to stdout only, no human-readable text)
 - [ ] Support `--filter` for method name glob/regex matching
 
+**CLI Output Mode Defaults:**
+- **Default behavior (no flags):** JSON report to **stdout**. No human-readable text.
+  All diagnostic messages and warnings go to **stderr**. This is the "agent-first" design —
+  `dotnet crap analyze` is equivalent to `dotnet crap analyze --quiet --format json`.
+- **`--quiet` flag:** Suppresses all stderr output (warnings, progress). Only JSON to stdout.
+- **`--format json|xml`:** Selects output format. Default is `json`.
+- **`--output <path>`:** Write report to file instead of stdout. When specified, a brief
+  human-readable summary is written to stdout (method count, CRAPpy count, exit status).
+- **Errors always go to stderr** as structured JSON (see spec section 8).
+
 **CLI Design:**
 ```bash
 # Basic usage — JSON to stdout (default for AI agent consumption)

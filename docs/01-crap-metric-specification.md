@@ -244,7 +244,19 @@ Cyclomatic complexity = 1 + the count of the following control flow constructs:
 - Switch expression arms (excluding the discard/default arm)
 - `catch` blocks
 - Logical AND (`&&`) and OR (`||`) operators (short-circuit evaluation creates branch points)
-- Null-coalescing operators — configurable (language-specific)
+- Null-coalescing operators — configurable (language-specific, **default: OFF**)
+
+**Default Configuration for Configurable Rules:**
+| Rule | Default | Rationale |
+|---|---|---|
+| Count `??` (null-coalesce) | OFF | Not counted in crap4j; preserves comparability |
+| Count `?.` (null-conditional) | OFF | C#-specific; would inflate scores vs Java |
+| Count LINQ expressions | OFF | Controversial; lambdas in `.Where()` are often trivial |
+| Count `catch` blocks | ON | Catches are genuine branches (consistent with industry tools) |
+| Count pattern match arms | ON | Each arm is a decision point, analogous to `case` labels |
+
+> **Rationale:** Defaults are conservative — they produce scores comparable to crap4j for
+> equivalent code. Teams can enable `?.`/`??`/LINQ counting for stricter analysis.
 
 **Excluded from complexity count:**
 - `else` (the `if` keyword already counts the branch; `else if` is counted by its `if`)
