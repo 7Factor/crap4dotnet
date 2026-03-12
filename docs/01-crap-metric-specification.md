@@ -279,9 +279,92 @@ interoperability with existing tooling that consumes crap4j reports.
 
 ---
 
-## 8. Language-Specific Considerations
+## 8. Error Output Specification
 
-### 8.1 Java-Specific Features (from original crap4j)
+### 8.1 Error Output Format
+
+When the tool encounters an error (exit code 2), it MUST write structured JSON to **stderr**.
+Stdout MUST remain empty or contain only a partial valid JSON report (for streaming errors).
+This ensures AI agents can always parse error information programmatically.
+
+```json
+{
+  "error": {
+    "code": "COVERAGE_FILE_NOT_FOUND",
+    "message": "Coverage file not found: ./TestResults/coverage.cobertura.xml",
+    "details": "Run 'dotnet test --collect:\"XPlat Code Coverage\"' to generate coverage data.",
+    "file": "./TestResults/coverage.cobertura.xml"
+  }
+}
+```
+
+### 8.2 Error Codes
+
+| Code | Exit Code | Description |
+|---|---|---|
+| `SOURCE_NOT_FOUND` | 2 | The specified .cs/.csproj/.sln file does not exist |
+| `COVERAGE_FILE_NOT_FOUND` | 2 | The specified or auto-discovered coverage file does not exist |
+| `COVERAGE_PARSE_ERROR` | 2 | Coverage XML is malformed or uses an unsupported format |
+| `SOURCE_PARSE_ERROR` | 2 | C# source file has syntax errors preventing analysis |
+| `NO_METHODS_FOUND` | 2 | No analyzable methods found in the specified source |
+| `INVALID_CONFIGURATION` | 2 | Configuration file or CLI flags contain invalid values |
+| `INVALID_THRESHOLD` | 2 | Threshold is <= 0 or not a valid number |
+| `DIFF_SCHEMA_MISMATCH` | 2 | Diff input files have incompatible schema versions |
+| `DIFF_FILE_NOT_FOUND` | 2 | One or both diff input files do not exist |
+| `IO_ERROR` | 2 | File system error (permissions, disk full, etc.) |
+
+### 8.3 Warning Output
+
+Non-fatal issues are reported as warnings in the JSON report's top-level `warnings` array.
+Warnings do NOT change the exit code.
+
+```json
+{
+  "warnings": [
+    {
+      "code": "COVERAGE_STALE",
+      "message": "Coverage data is older than source files",
+      "details": "coverage.cobertura.xml was modified 2026-03-01, source was modified 2026-03-11"
+    },
+    {
+      "code": "UNMATCHED_METHODS",
+      "message": "3 methods in source had no coverage data (assumed 0.0 coverage)",
+      "details": "MyApp.NewService.DoWork(), MyApp.NewService.Init(), MyApp.Utils.Format()"
+    }
+  ]
+}
+```
+
+### 8.4 Warning Codes
+
+| Code | Description |
+|---|---|
+| `COVERAGE_STALE` | Coverage file is older than source files |
+| `UNMATCHED_METHODS` | Methods in source had no matching coverage entry |
+| `ORPHANED_COVERAGE` | Coverage entries had no matching source method |
+| `COVERAGE_CLAMPED` | Coverage values outside 0.0-1.0 were clamped |
+| `EMPTY_NAMESPACE` | A namespace contained no analyzable methods after filtering |
+
+### 8.5 Error Handling Test Scenarios
+
+| Scenario | Input | Expected |
+|---|---|---|
+| Missing source file | `dotnet crap analyze /nonexistent.sln` | Exit 2, `SOURCE_NOT_FOUND` |
+| Missing coverage file | `--coverage /nonexistent.xml` | Exit 2, `COVERAGE_FILE_NOT_FOUND` |
+| Corrupt coverage XML | Truncated XML file | Exit 2, `COVERAGE_PARSE_ERROR` |
+| C# syntax errors | File with `class {{{` | Exit 2, `SOURCE_PARSE_ERROR` |
+| No methods after filtering | Project with only interfaces | Exit 2, `NO_METHODS_FOUND` |
+| Threshold = 0 | `--threshold 0` | Exit 2, `INVALID_THRESHOLD` |
+| Threshold = -5 | `--threshold -5` | Exit 2, `INVALID_THRESHOLD` |
+| Diff with missing file | `dotnet crap diff a.json /missing.json` | Exit 2, `DIFF_FILE_NOT_FOUND` |
+| Valid but stale coverage | Coverage 10 days older than source | Exit 0, warning `COVERAGE_STALE` |
+| Methods without coverage | 3 source methods not in coverage XML | Exit 0/1, warning `UNMATCHED_METHODS` |
+
+---
+
+## 9. Language-Specific Considerations
+
+### 9.1 Java-Specific Features (from original crap4j)
 
 These are features specific to the Java implementation that may not directly translate:
 
@@ -296,7 +379,7 @@ These are features specific to the Java implementation that may not directly tra
 | **Inner classes** | Handles `$` separator in class names | Java-specific |
 | **Synthetic methods** | Filters bridge/synthetic methods | JVM-specific bytecode artifacts |
 
-### 8.2 Universally Applicable Features
+### 9.2 Universally Applicable Features
 
 These features should be implemented in ANY language port:
 - Core CRAP formula calculation
@@ -310,9 +393,9 @@ These features should be implemented in ANY language port:
 
 ---
 
-## 9. Extended Metrics (Optional Enhancements)
+## 10. Extended Metrics (Optional Enhancements)
 
-### 9.1 CRAP Trend Analysis
+### 10.1 CRAP Trend Analysis
 
 Track CRAP metrics over time (per build/commit) to identify:
 - **Improving trend**: Total CRAP Load decreasing
@@ -320,7 +403,7 @@ Track CRAP metrics over time (per build/commit) to identify:
 - **Fixed methods**: Previously CRAPpy methods now below threshold
 - **New CRAPpy methods**: Methods that newly exceed the threshold
 
-### 9.2 CRAP Diff (Build Comparison)
+### 10.2 CRAP Diff (Build Comparison)
 
 Compare two analysis runs to identify:
 - New CRAPpy methods (methods that became CRAPpy since last run)
@@ -329,7 +412,7 @@ Compare two analysis runs to identify:
 - Added methods (present in "after" but not "before")
 - Removed methods (present in "before" but not "after")
 
-#### 9.2.1 Diff JSON Output Schema
+#### 10.2.1 Diff JSON Output Schema
 
 ```json
 {
@@ -418,7 +501,7 @@ Compare two analysis runs to identify:
 }
 ```
 
-#### 9.2.2 Diff Classification Rules
+#### 10.2.2 Diff Classification Rules
 
 Methods are matched by `fullName` across the two reports:
 
@@ -435,7 +518,7 @@ Methods are matched by `fullName` across the two reports:
 > **Design note:** Unchanged methods are omitted from the `methods` section to keep
 > diff output compact. The `summary.unchanged` count tracks how many were omitted.
 
-#### 9.2.3 Diff Test Scenarios
+#### 10.2.3 Diff Test Scenarios
 
 | Scenario | Before | After | Expected |
 |---|---|---|---|
@@ -449,7 +532,7 @@ Methods are matched by `fullName` across the two reports:
 | Empty before report | 0 methods | 50 methods | all `added` |
 | Empty after report | 50 methods | 0 methods | all `removed` |
 
-### 9.3 Cognitive Complexity Integration
+### 10.3 Cognitive Complexity Integration
 
 Optionally support **Cognitive Complexity** (SonarSource, 2016) as an alternative or
 supplemental complexity metric. Cognitive complexity better captures human readability
@@ -459,7 +542,7 @@ while cyclomatic complexity better captures testability.
 CRAP_cognitive(m) = cogcomp(m)^2 * (1 - cov(m))^3 + cogcomp(m)
 ```
 
-### 9.4 Weighted CRAP
+### 10.4 Weighted CRAP
 
 Weight CRAP scores by method size (lines of code) to prioritize large complex methods
 over small complex ones:
