@@ -306,10 +306,15 @@ Statistics SHOULD be computable at multiple levels:
 
 #### 5.2.1 Hierarchical Aggregation in JSON Output
 
-The JSON report includes an optional `hierarchy` object that groups methods by
+The JSON report MUST always include a `hierarchy` object that groups methods by
 namespace and class. Each group carries the same stats schema as the top-level `stats`.
 This structure allows AI agents to identify the worst namespace or class without
 post-processing the flat `methods` array.
+
+> **Design decision:** The hierarchy is always present (not opt-in). For AI agents,
+> having to discover and pass a flag to get useful data is unnecessary friction.
+> The payload increase is modest — hierarchy adds ~30% to report size — and agents
+> can ignore the field if they only need the flat `methods` array.
 
 ```json
 {
