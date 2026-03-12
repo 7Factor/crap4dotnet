@@ -276,12 +276,12 @@ echo $?  # 0 = no CRAPpy methods, 1 = CRAPpy methods found
 1. Exit code semantics for programmatic pass/fail decisions
 2. Single-file analysis mode
 3. Stdin/stdout piping for coverage data
-4. Configuration file support
+4. ~~Configuration file support~~ (deferred to v2)
 
 **Tasks:**
 - [ ] Implement single-file analysis: `dotnet crap analyze --file ./src/MyService.cs`
 - [ ] Support reading coverage data from stdin: `--coverage -`
-- [ ] Add configuration file (`.crap4dotnet.json`) for per-project defaults
+- [ ] ~~Add configuration file (`.crap4dotnet.json`) for per-project defaults~~ (deferred to v2)
 - [ ] Add `--top N` flag to return only the N worst methods (most useful for agents)
 - [ ] Add `--sort-by crap|complexity|coverage|crapLoad` for result ordering
 - [ ] Include `filePath` and `lineNumber` in all JSON method entries
@@ -308,9 +308,13 @@ echo $?  # 0 = no CRAPpy methods, 1 = CRAPpy methods found
 
 ---
 
-## 5. Configuration File Format
+## 5. Configuration File Format (Deferred to v2)
 
-`.crap4dotnet.json`:
+> **v1 scope:** CLI flags only. Configuration file support is deferred to v2. For AI agent
+> usage, CLI flags are sufficient — agents construct the full command line programmatically
+> and don't benefit from persisted config files.
+
+`.crap4dotnet.json` (v2 — reference schema for future implementation):
 ```json
 {
   "threshold": 30,
