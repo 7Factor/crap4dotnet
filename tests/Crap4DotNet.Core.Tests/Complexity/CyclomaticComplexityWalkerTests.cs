@@ -569,4 +569,66 @@ public class Beta
         results.Select(r => r.Identity.MethodName).Should()
             .Contain("A").And.Contain("B").And.Contain("C");
     }
+
+    // === IDecisionPointRule composition ===
+
+    [Fact]
+    public void CoalesceRule_DefaultOff_DoesNotCount()
+    {
+        var results = Analyze(@"
+namespace MyApp;
+public class Svc
+{
+    public string M(string? x) { return x ?? ""default""; }
+}");
+        // ?? is default OFF, so complexity = 1 (base only)
+        results.Should().ContainSingle().Which.Complexity.Should().Be(1);
+    }
+
+    [Fact]
+    public void CoalesceRule_WhenEnabled_CountsAsDecisionPoint()
+    {
+        var code = @"
+namespace MyApp;
+public class Svc
+{
+    public string M(string? x) { return x ?? ""default""; }
+}";
+        var rules = DecisionPointRules.Default
+            .Append(new DecisionPointRules.CoalesceRule())
+            .ToList();
+        var results = CyclomaticComplexityWalker.Analyze(code, "Test.cs", rules);
+        // ?? is now ON, so complexity = 2 (base + coalesce)
+        results.Should().ContainSingle().Which.Complexity.Should().Be(2);
+    }
+
+    [Fact]
+    public void ConditionalAccessRule_DefaultOff_DoesNotCount()
+    {
+        var results = Analyze(@"
+namespace MyApp;
+public class Svc
+{
+    public int? M(string? x) { return x?.Length; }
+}");
+        // ?. is default OFF, so complexity = 1 (base only)
+        results.Should().ContainSingle().Which.Complexity.Should().Be(1);
+    }
+
+    [Fact]
+    public void ConditionalAccessRule_WhenEnabled_CountsAsDecisionPoint()
+    {
+        var code = @"
+namespace MyApp;
+public class Svc
+{
+    public int? M(string? x) { return x?.Length; }
+}";
+        var rules = DecisionPointRules.Default
+            .Append(new DecisionPointRules.ConditionalAccessRule())
+            .ToList();
+        var results = CyclomaticComplexityWalker.Analyze(code, "Test.cs", rules);
+        // ?. is now ON, so complexity = 2 (base + conditional access)
+        results.Should().ContainSingle().Which.Complexity.Should().Be(2);
+    }
 }

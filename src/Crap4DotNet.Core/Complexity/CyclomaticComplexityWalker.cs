@@ -11,10 +11,13 @@ namespace Crap4DotNet.Core.Complexity;
 /// </summary>
 public static class CyclomaticComplexityWalker
 {
-    public static IReadOnlyList<MethodComplexityResult> Analyze(string sourceCode, string? filePath = null)
+    public static IReadOnlyList<MethodComplexityResult> Analyze(
+        string sourceCode,
+        string? filePath = null,
+        IReadOnlyList<IDecisionPointRule>? rules = null)
     {
         var tree = CSharpSyntaxTree.ParseText(sourceCode, path: filePath ?? string.Empty);
-        var finder = new MethodFinder(filePath);
+        var finder = new MethodFinder(filePath, rules ?? DecisionPointRules.Default);
         finder.Visit(tree.GetRoot());
         return finder.Results;
     }
@@ -26,13 +29,18 @@ public static class CyclomaticComplexityWalker
     private sealed class MethodFinder : CSharpSyntaxWalker
     {
         private readonly string? _filePath;
+        private readonly IReadOnlyList<IDecisionPointRule> _rules;
         private readonly List<MethodComplexityResult> _results = [];
         private readonly Stack<string> _namespaceStack = new();
         private readonly Stack<string> _typeStack = new();
 
         public IReadOnlyList<MethodComplexityResult> Results => _results;
 
-        public MethodFinder(string? filePath) => _filePath = filePath;
+        public MethodFinder(string? filePath, IReadOnlyList<IDecisionPointRule> rules)
+        {
+            _filePath = filePath;
+            _rules = rules;
+        }
 
         private string CurrentNamespace =>
             _namespaceStack.Count > 0 ? string.Join(".", _namespaceStack.Reverse()) : string.Empty;
@@ -182,7 +190,7 @@ public static class CyclomaticComplexityWalker
             var globalStatements = node.Members.OfType<GlobalStatementSyntax>().ToList();
             if (globalStatements.Count > 0)
             {
-                var counter = new DecisionPointCounter();
+                var counter = new DecisionPointCounter(_rules);
                 foreach (var gs in globalStatements)
                     counter.Visit(gs);
 
@@ -213,7 +221,7 @@ public static class CyclomaticComplexityWalker
         private void RecordMethod(string methodName, string signature, SyntaxNode declarationNode)
         {
             var body = GetMethodBody(declarationNode);
-            var counter = new DecisionPointCounter();
+            var counter = new DecisionPointCounter(_rules);
             if (body is not null)
                 counter.Visit(body);
 
@@ -305,95 +313,28 @@ public static class CyclomaticComplexityWalker
     }
 
     /// <summary>
-    /// Counts decision points within a method body. Stops at nested method boundaries
-    /// (local functions) since those are analyzed as separate methods.
-    /// Lambdas contribute to the enclosing method's complexity.
+    /// Counts decision points within a method body using composed rules.
+    /// Stops at nested method boundaries (local functions) since those are
+    /// analyzed as separate methods. Lambdas contribute to the enclosing
+    /// method's complexity.
     /// </summary>
-    private sealed class DecisionPointCounter : CSharpSyntaxWalker
+    private sealed class DecisionPointCounter(IReadOnlyList<IDecisionPointRule> rules) : CSharpSyntaxWalker
     {
         public int Count { get; private set; } = 1; // base complexity
 
-        public override void VisitIfStatement(IfStatementSyntax node)
+        public override void DefaultVisit(SyntaxNode node)
         {
-            Count++;
-            base.VisitIfStatement(node);
-        }
-
-        public override void VisitForStatement(ForStatementSyntax node)
-        {
-            Count++;
-            base.VisitForStatement(node);
-        }
-
-        public override void VisitForEachStatement(ForEachStatementSyntax node)
-        {
-            Count++;
-            base.VisitForEachStatement(node);
-        }
-
-        public override void VisitForEachVariableStatement(ForEachVariableStatementSyntax node)
-        {
-            Count++;
-            base.VisitForEachVariableStatement(node);
-        }
-
-        public override void VisitWhileStatement(WhileStatementSyntax node)
-        {
-            Count++;
-            base.VisitWhileStatement(node);
-        }
-
-        public override void VisitDoStatement(DoStatementSyntax node)
-        {
-            Count++;
-            base.VisitDoStatement(node);
-        }
-
-        public override void VisitCaseSwitchLabel(CaseSwitchLabelSyntax node)
-        {
-            Count++;
-            base.VisitCaseSwitchLabel(node);
-        }
-
-        public override void VisitCasePatternSwitchLabel(CasePatternSwitchLabelSyntax node)
-        {
-            Count++;
-            base.VisitCasePatternSwitchLabel(node);
-        }
-
-        public override void VisitSwitchExpressionArm(SwitchExpressionArmSyntax node)
-        {
-            // Exclude discard pattern (_) — it's the default arm
-            if (node.Pattern is not DiscardPatternSyntax)
-                Count++;
-            base.VisitSwitchExpressionArm(node);
-        }
-
-        public override void VisitCatchClause(CatchClauseSyntax node)
-        {
-            Count++;
-            base.VisitCatchClause(node);
-        }
-
-        public override void VisitConditionalExpression(ConditionalExpressionSyntax node)
-        {
-            Count++;
-            base.VisitConditionalExpression(node);
-        }
-
-        public override void VisitBinaryExpression(BinaryExpressionSyntax node)
-        {
-            if (node.IsKind(SyntaxKind.LogicalAndExpression) ||
-                node.IsKind(SyntaxKind.LogicalOrExpression))
+            foreach (var rule in rules)
             {
-                Count++;
+                if (rule.IsDecisionPoint(node))
+                {
+                    Count++;
+                    break; // one increment per node even if multiple rules match
+                }
             }
 
-            // Note: CoalesceExpression (??) is configurable, default OFF per spec 6.1
-            base.VisitBinaryExpression(node);
+            base.DefaultVisit(node);
         }
-
-        // Note: ConditionalAccessExpression (?.) is configurable, default OFF per spec 6.1
 
         // Stop at local function boundaries — they are analyzed as separate methods
         public override void VisitLocalFunctionStatement(LocalFunctionStatementSyntax node) { }
