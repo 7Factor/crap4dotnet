@@ -13,20 +13,20 @@ dotnet tool install -g Crap4DotNet
 ## Usage
 
 ```bash
-# Analyze a project (auto-discovers coverage from TestResults)
-dotnet crap analyze ./src/MyProject
+# Run tests and analyze in one step
+dotnet-crap analyze ./MyApp.sln --run-tests
 
 # Analyze with explicit coverage file
-dotnet crap analyze ./src/MyProject --coverage ./TestResults/coverage.cobertura.xml
+dotnet-crap analyze ./src/MyProject --coverage ./TestResults/coverage.cobertura.xml
 
 # Write report to file
-dotnet crap analyze ./src/MyProject --output report.json
+dotnet-crap analyze ./src/MyProject --coverage ./coverage.xml --output report.json
 
 # Custom threshold (default: 30)
-dotnet crap analyze ./src/MyProject --threshold 15
+dotnet-crap analyze ./src/MyProject --coverage ./coverage.xml --threshold 15
 
 # Compare two reports
-dotnet crap diff before.json after.json
+dotnet-crap diff before.json after.json
 ```
 
 ## Exit Codes
@@ -48,4 +48,4 @@ A method with complexity 20 and 10% coverage has a CRAP score of ~312 (terrible)
 
 ## JSON Output
 
-The tool outputs a JSON report with method-level CRAP scores, statistics, severity bands, and a namespace hierarchy. See the [specification](https://github.com/7f/crap4dotnet) for the full schema.
+The tool outputs a JSON report with method-level CRAP scores, statistics, severity bands, and a namespace hierarchy. See the [specification](https://github.com/7Factor/crap4dotnet) for the full schema.
