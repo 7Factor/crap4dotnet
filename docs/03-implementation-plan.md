@@ -1,0 +1,527 @@
+# Implementation Plan: crap4dotnet
+
+> **Version:** 1.1
+> **Date:** 2026-03-11
+> **Target Framework:** .NET 8+ (LTS)
+> **License:** MIT (matching open-source spirit of original crap4j)
+> **Target Consumer:** AI coding agents via CLI (no IDE/CI integrations)
+
+---
+
+## 1. Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        crap4dotnet CLI                          │
+│                    (dotnet global tool)                         │
+│                  dotnet crap analyze <path>                     │
+└──────────────┬──────────────────────────────┬───────────────────┘
+               │                              │
+    ┌──────────▼──────────┐       ┌───────────▼───────────┐
+    │  Complexity Engine   │       │   Coverage Reader     │
+    │  (Roslyn-based)      │       │   (Cobertura XML)     │
+    │                      │       │   (OpenCover XML)     │
+    │  - Walks syntax tree │       │                       │
+    │  - Counts decisions  │       │  - Parses XML files   │
+    │  - Per-method scores │       │  - Maps to methods    │
+    └──────────┬───────────┘       └───────────┬───────────┘
+               │                               │
+    ┌──────────▼───────────────────────────────▼───────────┐
+    │                  CRAP Calculator                      │
+    │                                                       │
+    │  - Joins complexity + coverage by method identity     │
+    │  - Computes CRAP score per method                     │
+    │  - Computes CRAP Load per method                      │
+    │  - Aggregates to class/namespace/project              │
+    └──────────────────────┬───────────────────────────────┘
+                           │
+    ┌──────────────────────▼───────────────────────────────┐
+    │                  Report Generator                     │
+    │                                                       │
+    │  - JSON (primary — structured for AI agents)          │
+    │  - XML (optional — crap4j-compatible legacy)          │
+    │  - Console (minimal — exit codes + summary line)      │
+    └──────────────────────────────────────────────────────┘
+```
+
+---
+
+## 2. Project Structure
+
+```
+crap4dotnet/
+├── src/
+│   ├── Crap4DotNet.Core/                  # Core library (netstandard2.0 + net8.0)
+│   │   ├── Models/
+│   │   │   ├── MethodIdentity.cs          # Fully-qualified method identification
+│   │   │   ├── MethodCrapData.cs          # CRAP score, load, complexity, coverage per method
+│   │   │   ├── TypeCrapData.cs            # Aggregated type-level stats
+│   │   │   ├── NamespaceCrapData.cs       # Aggregated namespace-level stats
+│   │   │   └── ProjectCrapData.cs         # Aggregated project-level stats
+│   │   ├── Calculation/
+│   │   │   ├── CrapCalculator.cs          # Core CRAP formula: comp^2 * (1-cov)^3 + comp
+│   │   │   ├── CrapLoadCalculator.cs      # CRAP Load formula
+│   │   │   └── CrapStatistics.cs          # Aggregation (mean, median, stddev, histogram)
+│   │   ├── Configuration/
+│   │   │   └── CrapOptions.cs             # Threshold, severity bands, configurable rules
+│   │   └── Abstractions/
+│   │       ├── IComplexityAnalyzer.cs      # Interface for complexity providers
+│   │       ├── ICoverageReader.cs          # Interface for coverage data providers
+│   │       └── IReportWriter.cs            # Interface for report output
+│   │
+│   ├── Crap4DotNet.Complexity/            # Complexity analysis (net8.0)
+│   │   ├── Roslyn/
+│   │   │   ├── CyclomaticComplexityWalker.cs    # SyntaxWalker counting decision points
+│   │   │   └── MethodDiscovery.cs               # Find all methods in a compilation
+│   │   └── RoslynComplexityAnalyzer.cs          # IComplexityAnalyzer implementation
+│   │
+│   ├── Crap4DotNet.Coverage/             # Coverage data readers (net8.0)
+│   │   ├── Cobertura/
+│   │   │   └── CoberturaCoverageReader.cs       # Parse coverage.cobertura.xml
+│   │   └── MethodCoverageMatcher.cs             # Match coverage data to method identities
+│   │
+│   ├── Crap4DotNet.Reporting/            # Report generators (net8.0)
+│   │   ├── Json/
+│   │   │   └── JsonReportWriter.cs              # Primary: structured JSON for AI agents
+│   │   └── Xml/
+│   │       └── Crap4jXmlReportWriter.cs         # Optional: crap4j-compatible XML
+│   │
+│   └── Crap4DotNet.Cli/                  # CLI application (net8.0)
+│       ├── Program.cs                     # Entry point + System.CommandLine setup
+│       ├── Commands/
+│       │   ├── AnalyzeCommand.cs          # Main analysis command
+│       │   └── DiffCommand.cs             # Compare two JSON reports
+│       └── Crap4DotNet.Cli.csproj         # Packed as dotnet global tool
+│
+├── tests/
+│   ├── Crap4DotNet.Core.Tests/
+│   │   ├── CrapCalculatorTests.cs         # Formula validation with known values
+│   │   ├── CrapLoadCalculatorTests.cs
+│   │   └── CrapStatisticsTests.cs
+│   ├── Crap4DotNet.Complexity.Tests/
+│   │   ├── CyclomaticComplexityWalkerTests.cs   # Test against known C# samples
+│   │   └── Samples/                              # C# files with known complexity
+│   ├── Crap4DotNet.Coverage.Tests/
+│   │   ├── CoberturaCoverageReaderTests.cs
+│   │   └── TestData/                              # Sample coverage XML files
+│   ├── Crap4DotNet.Reporting.Tests/
+│   └── Crap4DotNet.Cli.Tests/
+│       └── EndToEndTests.cs                       # Full pipeline integration tests
+│
+├── samples/
+│   ├── SampleProject/                     # A small C# project for demo/testing
+│   └── SampleCoverageData/                # Pre-generated coverage XML
+│
+├── docs/
+│   ├── 01-crap-metric-specification.md
+│   ├── 02-gap-analysis.md
+│   └── 03-implementation-plan.md          # This file
+│
+├── crap4dotnet.sln
+├── Directory.Build.props                  # Shared MSBuild properties
+└── Directory.Packages.props               # Central package management
+```
+
+---
+
+## 3. Key Dependencies
+
+| Package | Purpose | Version |
+|---|---|---|
+| `Microsoft.CodeAnalysis.CSharp` | Roslyn compiler APIs for syntax analysis | 4.x (latest stable) |
+| `Microsoft.CodeAnalysis.Workspaces.MSBuild` | Load .csproj/.sln for analysis | 4.x |
+| `System.CommandLine` | CLI argument parsing | 2.x |
+| `System.Text.Json` | JSON serialization | Built-in (.NET 8) |
+
+> **Minimal dependency footprint.** No commercial dependencies. Statistical calculations
+> (median, stddev) will be implemented directly — they are simple enough to avoid pulling
+> in MathNet.Numerics for just two functions.
+
+---
+
+## 4. Implementation Phases
+
+### Phase 1: Core Engine (Weeks 1-2)
+
+**Goal:** Calculate CRAP scores for a single C# project given pre-existing coverage data.
+
+**Deliverables:**
+1. `Crap4DotNet.Core` — Models, CRAP formula, CRAP Load formula, statistics
+2. `Crap4DotNet.Complexity` — Roslyn cyclomatic complexity walker
+3. `Crap4DotNet.Coverage` — Cobertura XML reader
+4. Unit tests validating formula against known crap4j outputs
+
+**Tasks:**
+- [ ] Set up solution structure with `Directory.Build.props`
+- [ ] Implement `MethodIdentity` with full qualification and equality semantics
+- [ ] Implement `CrapCalculator` with formula: `comp^2 * (1-cov)^3 + comp`
+- [ ] Implement `CrapLoadCalculator` with formula: `comp * (1-cov) + comp/threshold`
+- [ ] Implement `CrapStatistics` with all aggregation metrics
+- [ ] Implement `CyclomaticComplexityWalker` as a Roslyn `CSharpSyntaxWalker`
+- [ ] Implement `CoberturaCoverageReader` parsing Coverlet's output XML
+- [ ] Implement `MethodCoverageMatcher` to join complexity and coverage data
+- [ ] Write comprehensive unit tests for formula edge cases
+- [ ] Write complexity walker tests against C# samples with known complexity
+- [ ] Validate Cobertura reader against real Coverlet output
+
+**Key Design Decisions:**
+- Complexity walker analyzes **source code** (not IL), ensuring accuracy for async, LINQ, etc.
+- Coverage reader produces `Dictionary<MethodIdentity, double>` for O(1) lookup
+- All calculations use `double` precision (matching crap4j)
+
+### Phase 2: CLI Tool (Weeks 3-4)
+
+**Goal:** Working `dotnet crap` CLI tool that AI agents can invoke and parse.
+
+**Deliverables:**
+1. `Crap4DotNet.Cli` — Global tool with `analyze` and `diff` commands
+2. `Crap4DotNet.Reporting` — JSON (primary) and XML (optional) output
+3. End-to-end tests running against sample projects
+
+**Tasks:**
+- [ ] Implement `AnalyzeCommand`: accept project/solution path + coverage file
+- [ ] Implement JSON report writer (primary output format for AI agents)
+- [ ] Implement crap4j-compatible XML report writer (optional legacy format)
+- [ ] Implement `DiffCommand`: compare two JSON reports, output delta
+- [ ] Package as `dotnet tool` with NuGet packaging
+- [ ] Write E2E tests: run `dotnet crap analyze` against sample project
+- [ ] Add `--threshold`, `--format`, `--output`, `--min-crap` CLI options
+- [ ] Add `--coverage` to specify coverage data path
+- [ ] Support auto-discovery: find `coverage.cobertura.xml` in `TestResults/`
+- [ ] Implement exit codes: 0 = clean, 1 = CRAPpy methods found, 2 = error
+- [ ] Support `--quiet` flag (JSON to stdout only, no human-readable text)
+- [ ] Support `--filter` for method name glob/regex matching
+
+**CLI Design:**
+```bash
+# Basic usage — JSON to stdout (default for AI agent consumption)
+dotnet crap analyze ./src/MyApp.sln --coverage ./TestResults/coverage.cobertura.xml
+
+# Save to file
+dotnet crap analyze ./src/MyApp.csproj \
+  --threshold 30 \
+  --output ./reports/crap-report.json \
+  --min-crap 15
+
+# Filter to specific methods
+dotnet crap analyze ./src/MyApp.sln \
+  --coverage ./coverage.cobertura.xml \
+  --filter "MyApp.Services.*"
+
+# Compare two reports (e.g., before/after refactoring)
+dotnet crap diff ./reports/before.json ./reports/after.json
+
+# Quiet mode: only JSON, exit code indicates pass/fail
+dotnet crap analyze ./src/MyApp.sln --quiet --threshold 30
+echo $?  # 0 = no CRAPpy methods, 1 = CRAPpy methods found
+```
+
+### Phase 3: Agent-Oriented Features (Weeks 5-6)
+
+**Goal:** Features that make the tool maximally useful for AI coding agents.
+
+**Deliverables:**
+1. Exit code semantics for programmatic pass/fail decisions
+2. Single-file analysis mode
+3. Stdin/stdout piping for coverage data
+4. Configuration file support
+
+**Tasks:**
+- [ ] Implement single-file analysis: `dotnet crap analyze --file ./src/MyService.cs`
+- [ ] Support reading coverage data from stdin: `--coverage -`
+- [ ] Add configuration file (`.crap4dotnet.json`) for per-project defaults
+- [ ] Add `--top N` flag to return only the N worst methods (most useful for agents)
+- [ ] Add `--sort-by crap|complexity|coverage|crapLoad` for result ordering
+- [ ] Include `filePath` and `lineNumber` in all JSON method entries
+- [ ] Add `--include-clean` flag (by default, only emit methods above `--min-crap`)
+- [ ] Ensure all error messages go to stderr, all data goes to stdout
+- [ ] Performance optimization: parallel file analysis using `Parallel.ForEach`
+
+### Phase 4: Extended Analysis (Weeks 7-8)
+
+**Goal:** Additional complexity metrics and coverage format support.
+
+**Deliverables:**
+1. Cognitive complexity support (optional alternative metric)
+2. OpenCover format support
+3. Configurable complexity rules for C#-specific constructs
+
+**Tasks:**
+- [ ] Implement `CognitiveComplexityWalker` (SonarSource algorithm)
+- [ ] Implement OpenCover XML reader
+- [ ] Add configurable complexity rules (count `?.`, `??`, LINQ, etc.)
+- [ ] Add source generator / `[GeneratedCode]` attribute exclusion
+- [ ] Add method-level `[SuppressCrap]` attribute support
+- [ ] Lazy Roslyn compilation (only parse syntax trees, don't do full compilation)
+- [ ] Pre-filter files by coverage data (skip files with no coverage entries)
+
+---
+
+## 5. Configuration File Format
+
+`.crap4dotnet.json`:
+```json
+{
+  "threshold": 30,
+  "severityBands": {
+    "low": [1, 5],
+    "moderate": [6, 15],
+    "elevated": [16, 29],
+    "high": [30, 60],
+    "critical": [61, null]
+  },
+  "complexity": {
+    "mode": "cyclomatic",
+    "countNullConditional": false,
+    "countNullCoalesce": false,
+    "countLinqExpressions": false,
+    "countCatchBlocks": true,
+    "countPatternMatchArms": true
+  },
+  "coverage": {
+    "format": "auto",
+    "paths": ["**/coverage.cobertura.xml"],
+    "defaultForUncovered": 0.0
+  },
+  "output": {
+    "format": "json",
+    "directory": "./crap-reports"
+  },
+  "filters": {
+    "excludeGenerated": true,
+    "excludePatterns": ["*.Designer.cs", "*.g.cs"],
+    "excludeAttributes": ["GeneratedCode", "CompilerGenerated"],
+    "minComplexity": 1,
+    "includeProperties": true,
+    "includeConstructors": true
+  },
+  "exitCodes": {
+    "failOnCrappy": true
+  }
+}
+```
+
+---
+
+## 6. Key Implementation Details
+
+### 6.1 Cyclomatic Complexity Walker
+
+The heart of the system. A Roslyn `CSharpSyntaxWalker` that visits each method body:
+
+```csharp
+// Pseudo-code for the walker
+public class CyclomaticComplexityWalker : CSharpSyntaxWalker
+{
+    public int Complexity { get; private set; } = 1; // Start at 1
+
+    public override void VisitIfStatement(IfStatementSyntax node)
+    {
+        Complexity++;
+        base.VisitIfStatement(node);
+    }
+
+    public override void VisitForStatement(ForStatementSyntax node)
+    {
+        Complexity++;
+        base.VisitForStatement(node);
+    }
+
+    public override void VisitForEachStatement(ForEachStatementSyntax node)
+    {
+        Complexity++;
+        base.VisitForEachStatement(node);
+    }
+
+    public override void VisitWhileStatement(WhileStatementSyntax node)
+    {
+        Complexity++;
+        base.VisitWhileStatement(node);
+    }
+
+    public override void VisitDoStatement(DoStatementSyntax node)
+    {
+        Complexity++;
+        base.VisitDoStatement(node);
+    }
+
+    public override void VisitCaseSwitchLabel(CaseSwitchLabelSyntax node)
+    {
+        Complexity++;
+        base.VisitCaseSwitchLabel(node);
+    }
+
+    public override void VisitCasePatternSwitchLabel(CasePatternSwitchLabelSyntax node)
+    {
+        Complexity++;
+        base.VisitCasePatternSwitchLabel(node);
+    }
+
+    public override void VisitCatchClause(CatchClauseSyntax node)
+    {
+        Complexity++;
+        base.VisitCatchClause(node);
+    }
+
+    public override void VisitConditionalExpression(ConditionalExpressionSyntax node)
+    {
+        Complexity++;
+        base.VisitConditionalExpression(node);
+    }
+
+    public override void VisitBinaryExpression(BinaryExpressionSyntax node)
+    {
+        if (node.IsKind(SyntaxKind.LogicalAndExpression) ||
+            node.IsKind(SyntaxKind.LogicalOrExpression))
+        {
+            Complexity++;
+        }
+        // Configurable: CoalesceExpression for ??
+        base.VisitBinaryExpression(node);
+    }
+
+    public override void VisitSwitchExpressionArm(SwitchExpressionArmSyntax node)
+    {
+        // Don't count the discard/default arm
+        if (node.Pattern is not DiscardPatternSyntax)
+        {
+            Complexity++;
+        }
+        base.VisitSwitchExpressionArm(node);
+    }
+}
+```
+
+### 6.2 Method Identity Matching
+
+The trickiest part: matching Roslyn method symbols to Coverlet coverage entries.
+
+**Coverlet (Cobertura XML)** identifies methods as:
+```xml
+<class name="MyApp.Services.UserService" filename="Services/UserService.cs">
+  <methods>
+    <method name="ValidateUser" signature="(System.String, System.String)" line-rate="0.75" branch-rate="0.50">
+```
+
+**Roslyn** identifies methods as:
+```csharp
+IMethodSymbol.ToDisplayString() → "MyApp.Services.UserService.ValidateUser(string, string)"
+```
+
+Strategy: Normalize both sides to a canonical form for matching:
+- Strip generic arity markers
+- Normalize primitive type names (`string` ↔ `System.String`)
+- Handle property accessors (`get_PropertyName` / `set_PropertyName`)
+- Handle operator overloads
+- Handle explicit interface implementations
+
+### 6.3 Coverage Data Pipeline (Agent Workflow)
+
+A typical AI agent workflow:
+
+```bash
+# Step 1: Agent runs tests with coverage
+dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults
+
+# Step 2: Agent runs CRAP analysis, captures JSON output
+CRAP_REPORT=$(dotnet crap analyze ./src/MyApp.sln --quiet)
+
+# Step 3: Agent parses JSON to decide what to refactor
+# The JSON contains filePath + lineNumber for each method,
+# so the agent can navigate directly to problematic code.
+
+# Step 4: After refactoring, agent re-runs to verify improvement
+dotnet crap diff ./reports/before.json ./reports/after.json
+```
+
+---
+
+## 7. Testing Strategy
+
+### 7.1 Formula Validation
+
+Test the CRAP formula against known values from the original crap4j:
+
+| Complexity | Coverage | Expected CRAP | Expected Load (threshold=30) |
+|---|---|---|---|
+| 1 | 1.0 | 1.0 | 0 |
+| 1 | 0.0 | 2.0 | 0 |
+| 5 | 0.0 | 30.0 | 0 (exactly at threshold) |
+| 6 | 0.0 | 42.0 | 6 |
+| 10 | 0.0 | 110.0 | 10 |
+| 10 | 0.42 | ~29.5 | 0 |
+| 30 | 1.0 | 30.0 | 0 (exactly at threshold) |
+| 30 | 0.0 | 930.0 | 31 |
+
+### 7.2 Complexity Validation
+
+Test complexity walker against C# samples with known values:
+
+```csharp
+// Expected complexity: 1
+void SimpleMethod() { Console.WriteLine("hello"); }
+
+// Expected complexity: 2
+void OneIf(bool x) { if (x) Console.WriteLine("yes"); }
+
+// Expected complexity: 4
+void MultipleConditions(int x) {
+    if (x > 0 && x < 100) Console.WriteLine("in range");
+    else if (x < 0) Console.WriteLine("negative");
+}
+
+// Expected complexity: 6
+int SwitchMethod(int x) => x switch {
+    1 => 10,
+    2 => 20,
+    3 => 30,
+    4 => 40,
+    _ => 0      // not counted (discard pattern)
+};              // 1 base + 4 non-default arms + 1 for switch = depends on config
+```
+
+### 7.3 End-to-End Validation
+
+Create a sample project with:
+- Methods of varying complexity (1 to 50+)
+- Varying coverage levels (0%, 50%, 100%)
+- All C# constructs (async, LINQ, patterns, properties, etc.)
+- Verify complete pipeline: `dotnet test` → coverage XML → `dotnet crap` → report
+
+---
+
+## 8. Performance Targets
+
+| Metric | Target |
+|---|---|
+| Small project (< 100 files) | < 5 seconds |
+| Medium project (100-500 files) | < 15 seconds |
+| Large project (500-2000 files) | < 60 seconds |
+| Very large solution (2000+ files) | < 3 minutes |
+
+**Optimization strategies:**
+- Parallel file analysis using `Parallel.ForEach`
+- Lazy Roslyn compilation (only parse syntax trees, don't compile)
+- Pre-filter files by coverage data (skip files with no coverage entries)
+- Incremental analysis (cache complexity scores, only recompute changed files)
+
+---
+
+## 9. Release Plan
+
+| Version | Scope | Target |
+|---|---|---|
+| **0.1.0-alpha** | Core formula + Roslyn complexity + Cobertura reader + JSON output | Phase 1 complete |
+| **0.5.0-beta** | Full CLI tool + diff command + exit codes + single-file mode | Phase 2-3 complete |
+| **1.0.0** | Config file + cognitive complexity + OpenCover + performance tuning | Phase 4 complete |
+
+---
+
+## 10. Success Criteria
+
+1. **Correctness:** CRAP scores match crap4j for equivalent Java/C# code
+2. **Agent-friendly:** JSON output parseable by any AI agent; exit codes for pass/fail
+3. **Ecosystem fit:** Installable as `dotnet tool`, works with `dotnet test` + Coverlet
+4. **Performance:** Analyzes a 1000-file solution in under 60 seconds
+5. **Minimal footprint:** Few dependencies, fast startup, small binary
+6. **Navigability:** Every method in output includes `filePath` and `lineNumber`
