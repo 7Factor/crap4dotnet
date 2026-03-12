@@ -80,6 +80,55 @@ Where:
    CRAP(31, 1.0) = 31 which exceeds the threshold of 30.
 5. **CRAP(30, 1.0) = 30 exactly equals the threshold** and is NOT CRAPpy (see Section 3.1).
 
+### 2.4 Input Validation and Edge Cases
+
+The following rules define behavior for boundary and invalid inputs:
+
+#### 2.4.1 Coverage Clamping
+
+Coverage values MUST be clamped to [0.0, 1.0] before computing CRAP:
+- Values < 0.0 → clamped to 0.0
+- Values > 1.0 → clamped to 1.0
+- When clamping occurs, emit a `COVERAGE_CLAMPED` warning
+
+#### 2.4.2 Complexity = 0
+
+Methods with cyclomatic complexity 0 (abstract, interface, empty body) MUST be **excluded**
+from CRAP analysis by default. They do not appear in the `methods` array or affect statistics.
+
+If a complexity-0 method slips through (filter disabled), the formula produces CRAP=0.
+This is mathematically valid but meaningless. The tool SHOULD still exclude these and emit
+a diagnostic warning.
+
+#### 2.4.3 Threshold Validation
+
+The CRAP threshold MUST be > 0. The tool MUST reject:
+- Threshold = 0 → `INVALID_THRESHOLD` error (division by zero in CRAP Load formula)
+- Threshold < 0 → `INVALID_THRESHOLD` error
+- Threshold is not a number → `INVALID_CONFIGURATION` error
+
+Default threshold is 30. There is no upper limit, but values above 100 are not practically useful.
+
+#### 2.4.4 Extremely High Complexity
+
+The CRAP formula uses `double` (IEEE 754 64-bit float). For complexity=1000, coverage=0.0:
+`CRAP = 1,000,000 + 1,000 = 1,001,000`. This is well within `double` range (max ~1.8×10^308).
+No special handling is needed for overflow. The tool MUST NOT use integer types for CRAP scores.
+
+#### 2.4.5 Empty Projects
+
+When a project or solution has **zero analyzable methods** (after filtering):
+- The `methods` array MUST be empty (`[]`)
+- `stats.methodCount` MUST be `0`
+- `stats.averageCrap` and `stats.medianCrap` MUST be `null` (not 0, not NaN)
+- `stats.totalCrap`, `stats.totalCrapLoad` MUST be `0`
+- `stats.standardDeviation` MUST be `null`
+- `stats.crappyMethodCount` MUST be `0`, `stats.crappyMethodPercent` MUST be `0.0`
+- Exit code: `0` (no CRAPpy methods found — vacuously true)
+
+> **Rationale:** Using `null` for averages/medians of empty sets avoids producing misleading
+> zeros. AI agents check `methodCount == 0` to detect this case.
+
 ---
 
 ## 3. Threshold and Classification
