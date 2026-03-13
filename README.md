@@ -1,5 +1,8 @@
 # crap4dotnet
 
+[![NuGet](https://img.shields.io/nuget/v/Crap4DotNet)](https://www.nuget.org/packages/Crap4DotNet)
+[![CI](https://github.com/7Factor/crap4dotnet/actions/workflows/ci.yml/badge.svg)](https://github.com/7Factor/crap4dotnet/actions/workflows/ci.yml)
+
 A .NET global tool that computes **CRAP (Change Risk Anti-Patterns)** scores for your C# code. CRAP combines cyclomatic complexity with code coverage to identify methods that are both complex and poorly tested — the riskiest code in your project.
 
 Designed for **AI agent consumption**: JSON to stdout, structured errors to stderr, meaningful exit codes.
@@ -27,12 +30,8 @@ Methods with a CRAP score above the threshold (default: 30) are **CRAPpy** — t
 
 ## Install
 
-Not yet published to NuGet. Install from source:
-
 ```bash
-git clone <repo-url> && cd crap4dotnet
-dotnet pack src/Crap4DotNet.Cli -o ./nupkg
-dotnet tool install -g Crap4DotNet --add-source ./nupkg
+dotnet tool install -g Crap4DotNet
 ```
 
 Requires .NET 8.0 or later.
@@ -194,7 +193,7 @@ Complexity analysis is purely syntactic (no semantic model needed), so the tool 
 ## Building from Source
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/7Factor/crap4dotnet.git
 cd crap4dotnet
 dotnet build
 dotnet test

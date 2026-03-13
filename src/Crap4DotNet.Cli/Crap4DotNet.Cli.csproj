@@ -5,11 +5,14 @@
     <RootNamespace>Crap4DotNet.Cli</RootNamespace>
     <AssemblyName>dotnet-crap</AssemblyName>
     <PackageId>Crap4DotNet</PackageId>
-    <Version>0.1.0</Version>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
     <Authors>7f</Authors>
     <Description>CLI tool for computing CRAP (Change Risk Anti-Patterns) scores on .NET projects. Combines cyclomatic complexity with code coverage to identify risky, under-tested methods.</Description>
     <PackageTags>crap;metrics;code-quality;complexity;coverage;dotnet-tool</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/7Factor/crap4dotnet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/7Factor/crap4dotnet</PackageProjectUrl>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>dotnet-crap</ToolCommandName>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -24,6 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="All" />
     <PackageReference Include="System.CommandLine" />
     <PackageReference Include="System.Text.Json" />
   </ItemGroup>
