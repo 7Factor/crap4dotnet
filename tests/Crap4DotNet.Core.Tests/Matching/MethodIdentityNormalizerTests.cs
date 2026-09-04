@@ -269,12 +269,18 @@ public sealed class MethodIdentityNormalizerTests
     }
 
     [Fact]
-    public void Cobertura_NullableType()
+    public void Cobertura_NullableType_DropsTheAnnotationBecauseTheOtherSideCannotCarryIt()
     {
+        // The canonical key is a MATCHING key, not a display name: it may only carry detail
+        // both sides can express. Nullable-REFERENCE annotations exist on the Roslyn side and
+        // nowhere in a CLR signature, so `?` is dropped -- and dropped on both sides, which is
+        // why Nullable<int> normalizing to `int?` must lose its `?` here too. Otherwise
+        // Roslyn's `int?` and this key would disagree and every such overload would go
+        // unmatched. Formatting for humans is the reporter's job, not this key's.
         var cov = MakeCobertura(
             signature: "(System.Nullable`1<System.Int32>)");
         CoberturaMethodParser.ToCanonicalKey(cov)
-            .Should().Be("MyApp.Service.DoWork(int?)");
+            .Should().Be("MyApp.Service.DoWork(int)");
     }
 
     [Fact]
