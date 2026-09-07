@@ -16,6 +16,7 @@ public static class MethodCoverageMatcher
     {
         // Build coverage lookups by normalized key
         var fullKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
+        var arityKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
         var nameKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
 
         foreach (var entry in coverageEntries)
@@ -23,11 +24,14 @@ public static class MethodCoverageMatcher
             var fullKey = CoberturaMethodParser.ToCanonicalKey(entry);
             AddToLookup(fullKeyLookup, fullKey, entry);
 
+            AddToLookup(arityKeyLookup, StripArity(fullKey), entry);
+
             var nameKey = MethodKeyHelper.GetNameOnlyKey(fullKey);
             AddToLookup(nameKeyLookup, nameKey, entry);
         }
 
         var matchedFullKeys = new HashSet<string>(StringComparer.Ordinal);
+        var matchedArityKeys = new HashSet<string>(StringComparer.Ordinal);
         var matchedNameKeys = new HashSet<string>(StringComparer.Ordinal);
         var methods = new List<MatchedMethod>();
         var unmatchedNames = new List<string>();
@@ -45,6 +49,24 @@ public static class MethodCoverageMatcher
                 {
                     Complexity = complexity,
                     Coverage = exactMatches[0].Coverage
+                });
+                continue;
+            }
+
+            // Pass 1b: Retry with the method's generic arity dropped. Roslyn always knows a
+            // method is generic and writes Foo<>; a Cobertura <method name> usually carries no
+            // method-level arity at all, so those two keys can never be equal and EVERY generic
+            // method would otherwise score 0.0 however well tested. Arity is kept in the exact
+            // key above rather than stripped there, so a genuine Find<T>/Find<T,U> pair stays
+            // distinguishable; this pass only relaxes it, and only when the result is unique.
+            var arityKey = StripArity(fullKey);
+            if (arityKeyLookup.TryGetValue(arityKey, out var arityMatches) && arityMatches.Count == 1)
+            {
+                matchedArityKeys.Add(arityKey);
+                methods.Add(new MatchedMethod
+                {
+                    Complexity = complexity,
+                    Coverage = arityMatches[0].Coverage
                 });
                 continue;
             }
@@ -80,7 +102,10 @@ public static class MethodCoverageMatcher
             if (matchedFullKeys.Contains(kvp.Key))
                 continue;
 
-            // Check if matched by name-only fallback
+            // Check if matched by the arity-relaxed or name-only fallback
+            if (matchedArityKeys.Contains(StripArity(kvp.Key)))
+                continue;
+
             var nameKey = MethodKeyHelper.GetNameOnlyKey(kvp.Key);
             if (matchedNameKeys.Contains(nameKey))
                 continue;
@@ -136,6 +161,15 @@ public static class MethodCoverageMatcher
             Methods = methods,
             Warnings = warnings
         };
+    }
+
+    /// <summary>Canonical key with the method's own generic arity removed.</summary>
+    private static string StripArity(string canonicalKey)
+    {
+        var sigStart = MethodKeyHelper.FindSignatureStart(canonicalKey);
+        return sigStart < 0
+            ? MethodKeyHelper.StripMethodGenericArity(canonicalKey)
+            : MethodKeyHelper.StripMethodGenericArity(canonicalKey[..sigStart]) + canonicalKey[sigStart..];
     }
 
     private static void AddToLookup(

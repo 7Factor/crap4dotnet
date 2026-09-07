@@ -75,6 +75,82 @@ public static partial class MethodKeyHelper
     }
 
     /// <summary>
+    /// Strip the generic arity marker from the method-name segment only.
+    /// </summary>
+    /// <remarks>
+    /// Roslyn knows a method is generic and writes <c>Foo&lt;&gt;</c>; a Cobertura
+    /// <c>&lt;method name&gt;</c> carries no method-level arity at all, so the two keys can
+    /// never be equal while the marker survives. Class-level arity is left alone: Cobertura
+    /// does encode that, as a backtick (<c>Cache`1</c>), and dropping it would make
+    /// <c>Cache&lt;T&gt;.Get</c> and a non-generic <c>Cache.Get</c> collide.
+    /// Only the final segment is touched, and only when its angle brackets are balanced.
+    /// </remarks>
+    public static string StripMethodGenericArity(string namePart)
+    {
+        var depth = 0;
+        var lastDot = -1;
+        for (var i = 0; i < namePart.Length; i++)
+        {
+            switch (namePart[i])
+            {
+                case '<': depth++; break;
+                case '>': depth--; break;
+                case '.' when depth == 0: lastDot = i; break;
+            }
+        }
+
+        var segStart = lastDot + 1;
+        var segment = namePart[segStart..];
+        var open = segment.IndexOf('<', StringComparison.Ordinal);
+        if (open < 0 || !segment.EndsWith('>'))
+            return namePart;
+
+        return namePart[..segStart] + segment[..open];
+    }
+
+    /// <summary>
+    /// Reduce a normalized signature to the information both sides can actually carry.
+    /// </summary>
+    /// <remarks>
+    /// Two kinds of detail exist on the Roslyn side and nowhere in a CLR signature, and each
+    /// silently blocks the exact-signature pass — which is the only pass that can resolve an
+    /// overload set, because the name-only fallback deliberately refuses an ambiguous one:
+    /// <list type="bullet">
+    /// <item>parameter modifiers: C# distinguishes <c>out</c>/<c>in</c>/<c>ref</c>, the CLR
+    /// records one by-ref marker, so all three fold to <c>ref</c>;</item>
+    /// <item>nullable-reference annotations: <c>string?</c> and <c>string</c> are the same CLR
+    /// type. <c>?</c> is dropped on both sides rather than one, so <c>int?</c> (Roslyn) and
+    /// <c>Nullable&lt;int&gt;</c> (Cobertura, which normalizes to <c>int?</c>) still agree.</item>
+    /// </list>
+    /// The cost is that an overload set differing <em>only</em> by nullability or by
+    /// <c>out</c> vs <c>ref</c> becomes ambiguous; such a set cannot be declared in C# anyway
+    /// for the modifier case, and the name-only pass still refuses rather than guessing.
+    /// </remarks>
+    public static string NormalizeSignatureForMatching(string signature)
+    {
+        if (string.IsNullOrEmpty(signature) || signature == "()")
+            return "()";
+        if (!signature.StartsWith('(') || !signature.EndsWith(')'))
+            return signature;
+
+        var inner = signature[1..^1];
+        if (string.IsNullOrWhiteSpace(inner))
+            return "()";
+
+        var reduced = SplitTypeList(inner).Select(t =>
+        {
+            var x = t.Trim();
+            if (x.StartsWith("out ", StringComparison.Ordinal))
+                x = "ref " + x[4..];
+            else if (x.StartsWith("in ", StringComparison.Ordinal))
+                x = "ref " + x[3..];
+            return x.Replace("?", "", StringComparison.Ordinal);
+        });
+
+        return "(" + string.Join(", ", reduced) + ")";
+    }
+
+    /// <summary>
     /// Convert CLR backtick generic arity notation to angle bracket notation.
     /// Cache`1 → Cache&lt;&gt;, Dictionary`2 → Dictionary&lt;,&gt;
     /// </summary>

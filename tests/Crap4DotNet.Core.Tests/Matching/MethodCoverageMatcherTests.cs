@@ -345,9 +345,13 @@ public sealed class MethodCoverageMatcherTests
     }
 
     [Fact]
-    public void FallbackMatch_OverloadedMethods_NoFallback()
+    public void OverloadedMethods_ResolvedByTheExactSignaturePass()
     {
-        // Two overloads with incompatible signatures → fallback finds multiple candidates → no match
+        // This case used to assert 0.0. It was never ambiguous: `out int` and `System.Int32&`
+        // are the same parameter, so the exact-signature pass can pick the right overload once
+        // C# modifiers and CLR by-ref are folded together. Reaching the name-only fallback at
+        // all was the bug -- the fallback is right to refuse two candidates, but it should
+        // never have been asked.
         var complexity = new[]
         {
             MakeComplexity("Process", signature: "(out int)")
@@ -360,9 +364,37 @@ public sealed class MethodCoverageMatcherTests
 
         var result = MethodCoverageMatcher.Match(complexity, coverage);
 
-        // Fallback finds 2 candidates for "Process" → ambiguous → defaults to 0.0
+        result.Methods.Should().ContainSingle()
+            .Which.Coverage.Should().Be(0.7);
+    }
+
+    [Fact]
+    public void ArityRelaxedMatch_AmbiguousCandidates_Refuses()
+    {
+        // The arity-relaxed pass exists because a Cobertura method name usually carries no
+        // method-level arity. When it DOES (coverlet emits Find`1 in some runs) a merged
+        // coverage set can hold both spellings of the same name, and both reduce to the same
+        // arity-stripped key. Two candidates means nothing identifies which belongs to the
+        // source method, so the pass declines rather than guessing -- inventing coverage is
+        // the one outcome worse than reporting none.
+        var complexity = new[]
+        {
+            MakeComplexity("Find<T>", signature: "(int)")
+        };
+        var coverage = new[]
+        {
+            // Deliberately neither is Find`1: an exact hit on Find<>(int) would be resolved by
+            // the pass above and never reach the relaxed one. These two differ in arity, so
+            // both reduce to Find(int) while matching the source key exactly zero times.
+            MakeCoverage("Find`2", signature: "(System.Int32)", coverage: 0.9),
+            MakeCoverage("Find", signature: "(System.Int32)", coverage: 0.1)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
         result.Methods.Should().ContainSingle()
             .Which.Coverage.Should().Be(0.0);
+        result.Warnings.Should().Contain(w => w.Code == "UNMATCHED_METHODS");
     }
 
     // === Preserves order ===
