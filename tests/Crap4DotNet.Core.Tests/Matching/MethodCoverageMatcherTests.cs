@@ -390,4 +390,24 @@ public sealed class MethodCoverageMatcherTests
         result.Methods.Select(m => m.Coverage)
             .Should().Equal(0.3, 0.1, 0.2);
     }
+
+    [Fact]
+    public void AsyncMethod_CoverageOnCompilerGeneratedStateMachine_IsAttributedToSourceMethod()
+    {
+        // The C# compiler rewrites an async body into a state machine class named
+        // "<MethodName>d__N", so Coverlet reports the coverage against MoveNext on
+        // that generated type rather than against the method the developer wrote.
+        var complexity = new[] { MakeComplexity("UpdateAsync", signature: "(int)") };
+        var coverage = new[]
+        {
+            MakeCoverage(
+                "MoveNext",
+                className: "MyApp.Service/<UpdateAsync>d__5",
+                coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
 }

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Crap4DotNet.Core.Coverage;
 
 namespace Crap4DotNet.Core.Matching;
@@ -7,7 +8,7 @@ namespace Crap4DotNet.Core.Matching;
 /// Converts CLR type names to C# keywords, backtick generics to angle brackets,
 /// nested type separators, and accessor/operator naming conventions.
 /// </summary>
-public static class CoberturaMethodParser
+public static partial class CoberturaMethodParser
 {
     private static readonly Dictionary<string, string> ClrToCSharpTypes = new(StringComparer.Ordinal)
     {
@@ -64,11 +65,44 @@ public static class CoberturaMethodParser
     /// </summary>
     public static string ToCanonicalKey(CoberturaMethodCoverage coverage)
     {
+        if (TryGetStateMachineOwnerKey(coverage.ClassName, coverage.MethodName, out var ownerKey))
+            return ownerKey;
+
         var className = NormalizeClassName(coverage.ClassName);
         var methodName = NormalizeMethodName(coverage.MethodName, className);
         var signature = NormalizeSignature(coverage.Signature);
         return $"{className}.{methodName}{signature}";
     }
+
+    /// <summary>
+    /// Async and iterator bodies are compiled into a generated state machine type named
+    /// "Outer/&lt;MethodName&gt;d__N", and coverage is reported against MoveNext on that
+    /// type rather than against the method in the source. Recover the owning method so
+    /// the entry can be matched to it.
+    /// </summary>
+    /// <remarks>
+    /// The generated type carries no parameter information, so the key is emitted
+    /// without a signature and resolves through the name-only fallback pass.
+    /// </remarks>
+    private static bool TryGetStateMachineOwnerKey(string className, string methodName, out string key)
+    {
+        key = string.Empty;
+
+        // Only MoveNext holds the rewritten body; the rest of the type is plumbing.
+        if (!string.Equals(methodName, "MoveNext", StringComparison.Ordinal))
+            return false;
+
+        var match = StateMachineClassRegex().Match(className);
+        if (!match.Success)
+            return false;
+
+        var owner = NormalizeClassName(match.Groups["owner"].Value);
+        key = $"{owner}.{match.Groups["method"].Value}";
+        return true;
+    }
+
+    [GeneratedRegex(@"^(?<owner>.+)/<(?<method>[^>]+)>d__\d+(?:`\d+)?$")]
+    private static partial Regex StateMachineClassRegex();
 
     private static string NormalizeClassName(string className)
     {
