@@ -444,4 +444,22 @@ public sealed class MethodCoverageMatcherTests
 
         result.Methods.Single().Coverage.Should().Be(1.0);
     }
+
+    [Fact]
+    public void SameMethodInTwoCoverageFiles_TakesTheHigherCoverage()
+    {
+        // A solution with several test projects emits one coverage file each, and a
+        // project that merely references the assembly under analysis reports its
+        // classes at zero. Which file was passed first must not decide the answer.
+        var complexity = new[] { MakeComplexity("Run") };
+        var coverage = new[]
+        {
+            MakeCoverage("Run", coverage: 0.0),
+            MakeCoverage("Run", coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
 }

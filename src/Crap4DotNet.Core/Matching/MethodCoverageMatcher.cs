@@ -51,8 +51,11 @@ public static class MethodCoverageMatcher
                 matchedFullKeys.Add(fullKey);
                 methods.Add(new MatchedMethod
                 {
+                    // One method can appear in several coverage files. Covered by any
+                    // of them means covered, and picking the first would make the
+                    // result depend on the order the files were passed in.
                     Complexity = complexity,
-                    Coverage = exactMatches[0].Coverage
+                    Coverage = exactMatches.Max(m => m.Coverage)
                 });
                 continue;
             }
