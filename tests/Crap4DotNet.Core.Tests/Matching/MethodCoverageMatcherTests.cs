@@ -430,4 +430,18 @@ public sealed class MethodCoverageMatcherTests
 
         result.Methods.Single().Coverage.Should().Be(1.0);
     }
+    [Fact]
+    public void GenericMethod_CoverageEntryCarriesNoArity_IsStillMatched()
+    {
+        // A non-async generic method has no state machine, and Coverlet writes no
+        // arity on the method name, so the entry is a bare "Apply". The source side
+        // normalizes type parameters to "Apply<>". The arity cannot be recovered from
+        // the coverage entry, so matching has to erase it from the source key instead.
+        var complexity = new[] { MakeComplexity("Apply<T>", signature: "(int)") };
+        var coverage = new[] { MakeCoverage("Apply", signature: "(System.Int32)", coverage: 1.0) };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
 }

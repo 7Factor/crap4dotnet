@@ -17,6 +17,7 @@ public static class MethodCoverageMatcher
         // Build coverage lookups by normalized key
         var fullKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
         var nameKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
+        var erasedKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
 
         foreach (var entry in coverageEntries)
         {
@@ -25,10 +26,17 @@ public static class MethodCoverageMatcher
 
             var nameKey = MethodKeyHelper.GetNameOnlyKey(fullKey);
             AddToLookup(nameKeyLookup, nameKey, entry);
+
+            var erasedKey = MethodKeyHelper.EraseMethodGenericArity(nameKey);
+            if (!string.Equals(erasedKey, nameKey, StringComparison.Ordinal))
+                AddToLookup(erasedKeyLookup, erasedKey, entry);
+            else
+                AddToLookup(erasedKeyLookup, nameKey, entry);
         }
 
         var matchedFullKeys = new HashSet<string>(StringComparer.Ordinal);
         var matchedNameKeys = new HashSet<string>(StringComparer.Ordinal);
+        var matchedErasedKeys = new HashSet<string>(StringComparer.Ordinal);
         var methods = new List<MatchedMethod>();
         var unmatchedNames = new List<string>();
         var warnings = new List<DiagnosticWarning>();
@@ -62,6 +70,20 @@ public static class MethodCoverageMatcher
                 continue;
             }
 
+            // Pass 3: Generic methods carry no arity on the Cobertura side, so fall
+            // back to a key with the method's arity erased from both sides.
+            var erasedKey = MethodKeyHelper.EraseMethodGenericArity(nameKey);
+            if (erasedKeyLookup.TryGetValue(erasedKey, out var erasedMatches) && erasedMatches.Count == 1)
+            {
+                matchedErasedKeys.Add(erasedKey);
+                methods.Add(new MatchedMethod
+                {
+                    Complexity = complexity,
+                    Coverage = erasedMatches[0].Coverage
+                });
+                continue;
+            }
+
             // No match found → default to 0.0
             unmatchedNames.Add(complexity.Identity.FullName);
             methods.Add(new MatchedMethod
@@ -83,6 +105,10 @@ public static class MethodCoverageMatcher
             // Check if matched by name-only fallback
             var nameKey = MethodKeyHelper.GetNameOnlyKey(kvp.Key);
             if (matchedNameKeys.Contains(nameKey))
+                continue;
+
+            // Check if matched by the generic-erased fallback
+            if (matchedErasedKeys.Contains(MethodKeyHelper.EraseMethodGenericArity(nameKey)))
                 continue;
 
             orphanedCount += kvp.Value.Count;
