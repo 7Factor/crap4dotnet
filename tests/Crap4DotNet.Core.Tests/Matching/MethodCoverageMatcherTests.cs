@@ -410,4 +410,24 @@ public sealed class MethodCoverageMatcherTests
 
         result.Methods.Single().Coverage.Should().Be(1.0);
     }
+
+    [Fact]
+    public void GenericAsyncMethod_StateMachineArity_IsAttributedToSourceMethod()
+    {
+        // A generic async method's state machine carries the method's generic arity as
+        // a backtick suffix ("<Get>d__9`1"), while the source side spells the type
+        // parameters out ("Get<TStatus>"). Both have to reach the same canonical form.
+        var complexity = new[] { MakeComplexity("Get<TStatus>", signature: "(int)") };
+        var coverage = new[]
+        {
+            MakeCoverage(
+                "MoveNext",
+                className: "MyApp.Service/<Get>d__9`1",
+                coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
 }

@@ -97,11 +97,20 @@ public static partial class CoberturaMethodParser
             return false;
 
         var owner = NormalizeClassName(match.Groups["owner"].Value);
-        key = $"{owner}.{match.Groups["method"].Value}";
+        var method = match.Groups["method"].Value;
+
+        // A generic method's state machine carries the method's arity as a backtick
+        // suffix, where the source side spells the type parameters out. Both sides
+        // reduce to the same angle-bracket form.
+        var arity = match.Groups["arity"].Value;
+        if (arity.Length > 0)
+            method += MethodKeyHelper.NormalizeBacktickGenerics(arity);
+
+        key = $"{owner}.{method}";
         return true;
     }
 
-    [GeneratedRegex(@"^(?<owner>.+)/<(?<method>[^>]+)>d__\d+(?:`\d+)?$")]
+    [GeneratedRegex(@"^(?<owner>.+)/<(?<method>[^>]+)>d__\d+(?<arity>`\d+)?$")]
     private static partial Regex StateMachineClassRegex();
 
     private static string NormalizeClassName(string className)
