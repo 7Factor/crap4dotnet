@@ -38,16 +38,15 @@ public static class MethodCoverageMatcher
         // coverage key cannot tell apart; keep them together so they can be paired by
         // source position when that happens.
         var sourceGroups = new Dictionary<string, List<MethodComplexityResult>>(StringComparer.Ordinal);
+        var erasedSourceGroups = new Dictionary<string, List<MethodComplexityResult>>(StringComparer.Ordinal);
         foreach (var complexity in complexityResults)
         {
             var key = MethodKeyHelper.GetNameOnlyKey(RoslynMethodParser.ToCanonicalKey(complexity.Identity));
-            if (!sourceGroups.TryGetValue(key, out var group))
-            {
-                group = [];
-                sourceGroups[key] = group;
-            }
+            AddToGroup(sourceGroups, key, complexity);
 
-            group.Add(complexity);
+            // The erased pass collapses Apply<T> and Apply onto one key, so it needs
+            // its own grouping rather than reusing the name-only one.
+            AddToGroup(erasedSourceGroups, MethodKeyHelper.EraseMethodGenericArity(key), complexity);
         }
 
         var matchedFullKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -93,13 +92,15 @@ public static class MethodCoverageMatcher
             // Pass 3: Generic methods carry no arity on the Cobertura side, so fall
             // back to a key with the method's arity erased from both sides.
             var erasedKey = MethodKeyHelper.EraseMethodGenericArity(nameKey);
-            if (erasedKeyLookup.TryGetValue(erasedKey, out var erasedMatches) && erasedMatches.Count == 1)
+            if (erasedKeyLookup.TryGetValue(erasedKey, out var erasedMatches)
+                && TryResolveForMethod(
+                    erasedMatches, complexity, erasedSourceGroups[erasedKey], out var erasedCoverage))
             {
                 matchedErasedKeys.Add(erasedKey);
                 methods.Add(new MatchedMethod
                 {
                     Complexity = complexity,
-                    Coverage = erasedMatches[0].Coverage
+                    Coverage = erasedCoverage
                 });
                 continue;
             }
@@ -265,6 +266,20 @@ public static class MethodCoverageMatcher
         return source.EndsWith(report, StringComparison.OrdinalIgnoreCase)
             || string.Equals(
                 Path.GetFileName(source), Path.GetFileName(report), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AddToGroup(
+        Dictionary<string, List<MethodComplexityResult>> groups,
+        string key,
+        MethodComplexityResult complexity)
+    {
+        if (!groups.TryGetValue(key, out var group))
+        {
+            group = [];
+            groups[key] = group;
+        }
+
+        group.Add(complexity);
     }
 
     private static void AddToLookup(

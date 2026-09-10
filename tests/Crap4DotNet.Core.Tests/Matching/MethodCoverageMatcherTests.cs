@@ -540,4 +540,21 @@ public sealed class MethodCoverageMatcherTests
 
         result.Methods.Single().Coverage.Should().Be(1.0);
     }
+
+    [Fact]
+    public void GenericMethodInTwoCoverageFiles_IsStillMatchedByTheErasedFallback()
+    {
+        // A generic method resolves only through the arity-erased pass, which needs
+        // the same tolerance for one method arriving from several coverage files.
+        var complexity = new[] { MakeComplexity("Apply<T>", signature: "(int)") };
+        var coverage = new[]
+        {
+            MakeCoverage("Apply", signature: "(System.Int32)", coverage: 0.0),
+            MakeCoverage("Apply", signature: "(System.Int32)", coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
 }
