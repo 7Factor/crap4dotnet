@@ -14,7 +14,9 @@ public sealed class MethodCoverageMatcherTests
         string className = "Service",
         string ns = "MyApp",
         string signature = "()",
-        int complexity = 5) =>
+        int complexity = 5,
+        string filePath = "Test.cs",
+        int lineNumber = 1) =>
         new()
         {
             Identity = new MethodIdentity
@@ -24,8 +26,8 @@ public sealed class MethodCoverageMatcherTests
                 MethodName = methodName,
                 Signature = signature,
                 FullName = $"{ns}.{className}.{methodName}{signature}",
-                FilePath = "Test.cs",
-                LineNumber = 1
+                FilePath = filePath,
+                LineNumber = lineNumber
             },
             Complexity = complexity
         };
@@ -34,12 +36,16 @@ public sealed class MethodCoverageMatcherTests
         string methodName,
         string className = "MyApp.Service",
         string signature = "()",
-        double coverage = 0.8) =>
+        double coverage = 0.8,
+        string? fileName = null,
+        int? startLine = null) =>
         new()
         {
             ClassName = className,
             MethodName = methodName,
             Signature = signature,
+            FileName = fileName,
+            StartLine = startLine,
             Coverage = coverage
         };
 
@@ -389,5 +395,166 @@ public sealed class MethodCoverageMatcherTests
             .Should().Equal("C", "A", "B");
         result.Methods.Select(m => m.Coverage)
             .Should().Equal(0.3, 0.1, 0.2);
+    }
+
+    [Fact]
+    public void AsyncMethod_CoverageOnCompilerGeneratedStateMachine_IsAttributedToSourceMethod()
+    {
+        // The C# compiler rewrites an async body into a state machine class named
+        // "<MethodName>d__N", so Coverlet reports the coverage against MoveNext on
+        // that generated type rather than against the method the developer wrote.
+        var complexity = new[] { MakeComplexity("UpdateAsync", signature: "(int)") };
+        var coverage = new[]
+        {
+            MakeCoverage(
+                "MoveNext",
+                className: "MyApp.Service/<UpdateAsync>d__5",
+                coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void GenericAsyncMethod_StateMachineArity_IsAttributedToSourceMethod()
+    {
+        // A generic async method's state machine carries the method's generic arity as
+        // a backtick suffix ("<Get>d__9`1"), while the source side spells the type
+        // parameters out ("Get<TStatus>"). Both have to reach the same canonical form.
+        var complexity = new[] { MakeComplexity("Get<TStatus>", signature: "(int)") };
+        var coverage = new[]
+        {
+            MakeCoverage(
+                "MoveNext",
+                className: "MyApp.Service/<Get>d__9`1",
+                coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
+    [Fact]
+    public void GenericMethod_CoverageEntryCarriesNoArity_IsStillMatched()
+    {
+        // A non-async generic method has no state machine, and Coverlet writes no
+        // arity on the method name, so the entry is a bare "Apply". The source side
+        // normalizes type parameters to "Apply<>". The arity cannot be recovered from
+        // the coverage entry, so matching has to erase it from the source key instead.
+        var complexity = new[] { MakeComplexity("Apply<T>", signature: "(int)") };
+        var coverage = new[] { MakeCoverage("Apply", signature: "(System.Int32)", coverage: 1.0) };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void SameMethodInTwoCoverageFiles_TakesTheHigherCoverage()
+    {
+        // A solution with several test projects emits one coverage file each, and a
+        // project that merely references the assembly under analysis reports its
+        // classes at zero. Which file was passed first must not decide the answer.
+        var complexity = new[] { MakeComplexity("Run") };
+        var coverage = new[]
+        {
+            MakeCoverage("Run", coverage: 0.0),
+            MakeCoverage("Run", coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void TwoAsyncOverloads_AreNotMergedIntoASingleCoverageValue()
+    {
+        // Two async overloads compile to two state machines differing only by ordinal,
+        // and recovery has to drop the signature to match them at all, so both reduce
+        // to the same name. Nothing in the coverage file says which ordinal belongs to
+        // which overload, so attributing one overload's coverage to the other would
+        // report an untested overload as covered. Declining is the safe answer.
+        var complexity = new[]
+        {
+            MakeComplexity("Create", signature: "(Expense)"),
+            MakeComplexity("Create", signature: "(ExpenseDetails)")
+        };
+        var coverage = new[]
+        {
+            MakeCoverage("MoveNext", className: "MyApp.Service/<Create>d__5", coverage: 0.0),
+            MakeCoverage("MoveNext", className: "MyApp.Service/<Create>d__6", coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Should().OnlyContain(m => m.Coverage == 0.0);
+    }
+
+    [Fact]
+    public void TwoAsyncOverloads_AreDistinguishedBySourcePosition()
+    {
+        // The generated state machine keeps the original source positions, so the
+        // overload each one belongs to can be recovered from where its lines sit even
+        // though the signature is gone.
+        var complexity = new[]
+        {
+            MakeComplexity("Create", signature: "(Expense)",
+                filePath: "ExpenseCreator.cs", lineNumber: 26),
+            MakeComplexity("Create", signature: "(ExpenseDetails)",
+                filePath: "ExpenseCreator.cs", lineNumber: 63)
+        };
+        var coverage = new[]
+        {
+            MakeCoverage("MoveNext", className: "MyApp.Service/<Create>d__5",
+                coverage: 0.83, fileName: "ExpenseCreator.cs", startLine: 27),
+            MakeCoverage("MoveNext", className: "MyApp.Service/<Create>d__6",
+                coverage: 1.0, fileName: "ExpenseCreator.cs", startLine: 64)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single(m => m.Complexity.Identity.Signature == "(Expense)")
+            .Coverage.Should().Be(0.83);
+        result.Methods.Single(m => m.Complexity.Identity.Signature == "(ExpenseDetails)")
+            .Coverage.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void AsyncMethodInTwoCoverageFiles_IsStillMatchedByTheNameFallback()
+    {
+        // A recovered state machine key carries no signature, so it can only resolve
+        // through the name-only pass. With one coverage file per test project the same
+        // method arrives twice, and the pass must not mistake that for two overloads
+        // and drop the method to zero.
+        var complexity = new[] { MakeComplexity("Run", signature: "(int)") };
+        var coverage = new[]
+        {
+            MakeCoverage("MoveNext", className: "MyApp.Service/<Run>d__1", coverage: 0.0),
+            MakeCoverage("MoveNext", className: "MyApp.Service/<Run>d__1", coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void GenericMethodInTwoCoverageFiles_IsStillMatchedByTheErasedFallback()
+    {
+        // A generic method resolves only through the arity-erased pass, which needs
+        // the same tolerance for one method arriving from several coverage files.
+        var complexity = new[] { MakeComplexity("Apply<T>", signature: "(int)") };
+        var coverage = new[]
+        {
+            MakeCoverage("Apply", signature: "(System.Int32)", coverage: 0.0),
+            MakeCoverage("Apply", signature: "(System.Int32)", coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
     }
 }

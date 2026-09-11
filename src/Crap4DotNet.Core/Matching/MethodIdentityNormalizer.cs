@@ -75,6 +75,26 @@ public static partial class MethodKeyHelper
     }
 
     /// <summary>
+    /// Remove the generic arity marker from the method-name portion of a name-only key.
+    /// MyApp.Cache&lt;&gt;.Get&lt;&gt; -> MyApp.Cache&lt;&gt;.Get
+    /// </summary>
+    /// <remarks>
+    /// Coverlet writes no arity on a generic method's name, so the arity cannot be
+    /// recovered from the coverage side. Erasing it from both sides gives them a
+    /// common key. The declaring type keeps its arity, which both sides do supply.
+    /// </remarks>
+    public static string EraseMethodGenericArity(string nameOnlyKey)
+    {
+        var lastDot = nameOnlyKey.LastIndexOf('.');
+        if (lastDot < 0)
+            return nameOnlyKey;
+
+        var methodName = nameOnlyKey[(lastDot + 1)..];
+        var angle = methodName.IndexOf('<');
+        return angle < 0 ? nameOnlyKey : string.Concat(nameOnlyKey.AsSpan(0, lastDot + 1), methodName.AsSpan(0, angle));
+    }
+
+    /// <summary>
     /// Convert CLR backtick generic arity notation to angle bracket notation.
     /// Cache`1 → Cache&lt;&gt;, Dictionary`2 → Dictionary&lt;,&gt;
     /// </summary>
