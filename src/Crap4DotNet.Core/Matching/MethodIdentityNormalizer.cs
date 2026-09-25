@@ -78,12 +78,7 @@ public static partial class MethodKeyHelper
     /// Strip the generic arity marker from the method-name segment only.
     /// </summary>
     /// <remarks>
-    /// Roslyn knows a method is generic and writes <c>Foo&lt;&gt;</c>; a Cobertura
-    /// <c>&lt;method name&gt;</c> carries no method-level arity at all, so the two keys can
-    /// never be equal while the marker survives. Class-level arity is left alone: Cobertura
-    /// does encode that, as a backtick (<c>Cache`1</c>), and dropping it would make
-    /// <c>Cache&lt;T&gt;.Get</c> and a non-generic <c>Cache.Get</c> collide.
-    /// Only the final segment is touched, and only when its angle brackets are balanced.
+    /// Class-level arity is kept. Cobertura encodes it as a backtick (<c>Cache`1</c>).
     /// </remarks>
     public static string StripMethodGenericArity(string namePart)
     {
@@ -109,22 +104,11 @@ public static partial class MethodKeyHelper
     }
 
     /// <summary>
-    /// Reduce a normalized signature to the information both sides can actually carry.
+    /// Fold the <c>out</c> and <c>in</c> parameter modifiers to <c>ref</c>.
     /// </summary>
     /// <remarks>
-    /// Two kinds of detail exist on the Roslyn side and nowhere in a CLR signature, and each
-    /// silently blocks the exact-signature pass — which is the only pass that can resolve an
-    /// overload set, because the name-only fallback deliberately refuses an ambiguous one:
-    /// <list type="bullet">
-    /// <item>parameter modifiers: C# distinguishes <c>out</c>/<c>in</c>/<c>ref</c>, the CLR
-    /// records one by-ref marker, so all three fold to <c>ref</c>;</item>
-    /// <item>nullable-reference annotations: <c>string?</c> and <c>string</c> are the same CLR
-    /// type. <c>?</c> is dropped on both sides rather than one, so <c>int?</c> (Roslyn) and
-    /// <c>Nullable&lt;int&gt;</c> (Cobertura, which normalizes to <c>int?</c>) still agree.</item>
-    /// </list>
-    /// The cost is that an overload set differing <em>only</em> by nullability or by
-    /// <c>out</c> vs <c>ref</c> becomes ambiguous; such a set cannot be declared in C# anyway
-    /// for the modifier case, and the name-only pass still refuses rather than guessing.
+    /// A CLR signature has one by-ref marker for all three modifiers.
+    /// <c>?</c> annotations are kept, so <c>Foo(int)</c> and <c>Foo(int?)</c> stay distinct.
     /// </remarks>
     public static string NormalizeSignatureForMatching(string signature)
     {
@@ -144,7 +128,7 @@ public static partial class MethodKeyHelper
                 x = "ref " + x[4..];
             else if (x.StartsWith("in ", StringComparison.Ordinal))
                 x = "ref " + x[3..];
-            return x.Replace("?", "", StringComparison.Ordinal);
+            return x;
         });
 
         return "(" + string.Join(", ", reduced) + ")";

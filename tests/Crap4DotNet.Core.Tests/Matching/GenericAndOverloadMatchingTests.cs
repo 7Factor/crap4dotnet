@@ -8,19 +8,7 @@ using Xunit;
 namespace Crap4DotNet.Core.Tests.Matching;
 
 /// <summary>
-/// Coverage is silently discarded for two shapes that are ordinary in real code:
-/// generic methods and overload sets. Every case below is taken verbatim from a
-/// coverlet run over a production solution, where the Cobertura reported
-/// branch-rate="1" for the method while the report scored it 0.0.
-///
-/// Three independent mismatches cause it, and each needs its own case because
-/// fixing one still leaves the others failing:
-///   * the Roslyn key carries method-level generic arity (Foo&lt;&gt;) that a
-///     Cobertura method name never has;
-///   * Roslyn writes C# parameter modifiers (out T) where the CLR signature
-///     writes by-ref (T&amp;);
-///   * Roslyn carries nullable-reference annotations (string?) that the CLR
-///     signature cannot express at all.
+/// Coverage matching for generic methods, parameter modifiers, nullable annotations, and overload sets.
 /// </summary>
 public sealed class GenericAndOverloadMatchingTests
 {
@@ -78,9 +66,6 @@ public sealed class GenericAndOverloadMatchingTests
     [Fact]
     public void OverloadSet_PairsEachOverloadWithItsOwnCoverage()
     {
-        // The name-only fallback deliberately refuses an ambiguous set, so an overload
-        // set can only be resolved by the exact-signature pass. That is what makes
-        // signature normalization load-bearing rather than cosmetic.
         var result = MethodCoverageMatcher.Match(
             [
                 Source("BuildLink", "(string, string, int, string?)"),
@@ -97,10 +82,34 @@ public sealed class GenericAndOverloadMatchingTests
     }
 
     [Fact]
+    public void NullableValueTypeOverloads_KeepTheirOwnCoverage()
+    {
+        var result = MethodCoverageMatcher.Match(
+            [Source("Foo", "(int)"), Source("Foo", "(int?)")],
+            [
+                Cover("Foo", "(System.Int32)", 0.2),
+                Cover("Foo", "(System.Nullable`1<System.Int32>)", 0.8)
+            ]);
+
+        result.Methods[0].Coverage.Should().Be(0.2);
+        result.Methods[1].Coverage.Should().Be(0.8);
+    }
+
+    [Fact]
+    public void RelaxedMatch_SharedBySeveralSourceMethods_Refuses()
+    {
+        // Foo<T>(int) and Foo(int) share the relaxed key Foo(int).
+        var result = MethodCoverageMatcher.Match(
+            [Source("Foo", "(int)"), Source("Foo<T>", "(int)")],
+            [Cover("Foo", "(System.Int32)", 0.6)]);
+
+        result.Methods[0].Coverage.Should().Be(0.6);
+        result.Methods[1].Coverage.Should().Be(0.0);
+    }
+
+    [Fact]
     public void GenuinelyUncoveredMethod_StillReportsZero()
     {
-        // The repair must not invent coverage: a source method with no coverage entry
-        // at all still defaults to 0.0 and is still reported as unmatched.
         var result = MethodCoverageMatcher.Match(
             [Source("Untested<T>", "(int)")],
             [Cover("SomethingElse", "()", 1.0)]);
