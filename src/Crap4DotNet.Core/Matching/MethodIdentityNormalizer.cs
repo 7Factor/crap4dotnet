@@ -75,6 +75,66 @@ public static partial class MethodKeyHelper
     }
 
     /// <summary>
+    /// Strip the generic arity marker from the method-name segment only.
+    /// </summary>
+    /// <remarks>
+    /// Class-level arity is kept. Cobertura encodes it as a backtick (<c>Cache`1</c>).
+    /// </remarks>
+    public static string StripMethodGenericArity(string namePart)
+    {
+        var depth = 0;
+        var lastDot = -1;
+        for (var i = 0; i < namePart.Length; i++)
+        {
+            switch (namePart[i])
+            {
+                case '<': depth++; break;
+                case '>': depth--; break;
+                case '.' when depth == 0: lastDot = i; break;
+            }
+        }
+
+        var segStart = lastDot + 1;
+        var segment = namePart[segStart..];
+        var open = segment.IndexOf('<', StringComparison.Ordinal);
+        if (open < 0 || !segment.EndsWith('>'))
+            return namePart;
+
+        return namePart[..segStart] + segment[..open];
+    }
+
+    /// <summary>
+    /// Fold the <c>out</c> and <c>in</c> parameter modifiers to <c>ref</c>.
+    /// </summary>
+    /// <remarks>
+    /// A CLR signature has one by-ref marker for all three modifiers.
+    /// <c>?</c> annotations are kept, so <c>Foo(int)</c> and <c>Foo(int?)</c> stay distinct.
+    /// </remarks>
+    public static string NormalizeSignatureForMatching(string signature)
+    {
+        if (string.IsNullOrEmpty(signature) || signature == "()")
+            return "()";
+        if (!signature.StartsWith('(') || !signature.EndsWith(')'))
+            return signature;
+
+        var inner = signature[1..^1];
+        if (string.IsNullOrWhiteSpace(inner))
+            return "()";
+
+        var reduced = SplitTypeList(inner).Select(t =>
+        {
+            var x = t.Trim();
+            if (x.StartsWith("out ", StringComparison.Ordinal))
+                x = "ref " + x[4..];
+            else if (x.StartsWith("in ", StringComparison.Ordinal))
+                x = "ref " + x[3..];
+            return x;
+        });
+
+        return "(" + string.Join(", ", reduced) + ")";
+    }
+
+    /// <summary>
     /// Convert CLR backtick generic arity notation to angle bracket notation.
     /// Cache`1 → Cache&lt;&gt;, Dictionary`2 → Dictionary&lt;,&gt;
     /// </summary>

@@ -6,7 +6,7 @@ namespace Crap4DotNet.Core.Matching;
 /// <summary>
 /// Performs a left-outer-join from complexity results to coverage entries per spec 6.4.
 /// Every source method produces a result; unmatched methods default to coverage 0.0.
-/// Uses two-pass matching: exact canonical key first, then name-only fallback.
+/// Matching passes, in order: exact canonical key, relaxed key, name-only key.
 /// </summary>
 public static class MethodCoverageMatcher
 {
@@ -16,6 +16,7 @@ public static class MethodCoverageMatcher
     {
         // Build coverage lookups by normalized key
         var fullKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
+        var relaxedKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
         var nameKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
 
         foreach (var entry in coverageEntries)
@@ -23,15 +24,21 @@ public static class MethodCoverageMatcher
             var fullKey = CoberturaMethodParser.ToCanonicalKey(entry);
             AddToLookup(fullKeyLookup, fullKey, entry);
 
+            AddToLookup(relaxedKeyLookup, RelaxKey(fullKey), entry);
+
             var nameKey = MethodKeyHelper.GetNameOnlyKey(fullKey);
             AddToLookup(nameKeyLookup, nameKey, entry);
         }
 
         var matchedFullKeys = new HashSet<string>(StringComparer.Ordinal);
+        var matchedRelaxedKeys = new HashSet<string>(StringComparer.Ordinal);
         var matchedNameKeys = new HashSet<string>(StringComparer.Ordinal);
         var methods = new List<MatchedMethod>();
         var unmatchedNames = new List<string>();
         var warnings = new List<DiagnosticWarning>();
+        var sourceCountByRelaxedKey = complexityResults
+            .GroupBy(c => RelaxKey(RoslynMethodParser.ToCanonicalKey(c.Identity)), StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
 
         foreach (var complexity in complexityResults)
         {
@@ -45,6 +52,22 @@ public static class MethodCoverageMatcher
                 {
                     Complexity = complexity,
                     Coverage = exactMatches[0].Coverage
+                });
+                continue;
+            }
+
+            // Pass 1b: Relaxed key. Match only when exactly one coverage entry and exactly
+            // one source method have this key.
+            var relaxedKey = RelaxKey(fullKey);
+            if (relaxedKeyLookup.TryGetValue(relaxedKey, out var relaxedMatches)
+                && relaxedMatches.Count == 1
+                && sourceCountByRelaxedKey[relaxedKey] == 1)
+            {
+                matchedRelaxedKeys.Add(relaxedKey);
+                methods.Add(new MatchedMethod
+                {
+                    Complexity = complexity,
+                    Coverage = relaxedMatches[0].Coverage
                 });
                 continue;
             }
@@ -80,7 +103,10 @@ public static class MethodCoverageMatcher
             if (matchedFullKeys.Contains(kvp.Key))
                 continue;
 
-            // Check if matched by name-only fallback
+            // Check if matched by the relaxed or name-only fallback
+            if (matchedRelaxedKeys.Contains(RelaxKey(kvp.Key)))
+                continue;
+
             var nameKey = MethodKeyHelper.GetNameOnlyKey(kvp.Key);
             if (matchedNameKeys.Contains(nameKey))
                 continue;
@@ -136,6 +162,19 @@ public static class MethodCoverageMatcher
             Methods = methods,
             Warnings = warnings
         };
+    }
+
+    /// <summary>
+    /// Canonical key without the method's generic arity and without <c>?</c> annotations.
+    /// Cobertura method names often have no arity, and CLR signatures have no nullable reference types.
+    /// </summary>
+    private static string RelaxKey(string canonicalKey)
+    {
+        var sigStart = MethodKeyHelper.FindSignatureStart(canonicalKey);
+        return sigStart < 0
+            ? MethodKeyHelper.StripMethodGenericArity(canonicalKey)
+            : MethodKeyHelper.StripMethodGenericArity(canonicalKey[..sigStart])
+              + canonicalKey[sigStart..].Replace("?", "", StringComparison.Ordinal);
     }
 
     private static void AddToLookup(

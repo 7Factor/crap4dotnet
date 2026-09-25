@@ -51,6 +51,6 @@ public static class RoslynMethodParser
             return "<" + new string(',', paramCount - 1) + ">";
         });
 
-        return normalized + sigPart;
+        return normalized + MethodKeyHelper.NormalizeSignatureForMatching(sigPart);
     }
 }

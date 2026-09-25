@@ -345,9 +345,9 @@ public sealed class MethodCoverageMatcherTests
     }
 
     [Fact]
-    public void FallbackMatch_OverloadedMethods_NoFallback()
+    public void OverloadedMethods_ResolvedByTheExactSignaturePass()
     {
-        // Two overloads with incompatible signatures → fallback finds multiple candidates → no match
+        // `out int` and `System.Int32&` produce the same key.
         var complexity = new[]
         {
             MakeComplexity("Process", signature: "(out int)")
@@ -360,9 +360,29 @@ public sealed class MethodCoverageMatcherTests
 
         var result = MethodCoverageMatcher.Match(complexity, coverage);
 
-        // Fallback finds 2 candidates for "Process" → ambiguous → defaults to 0.0
+        result.Methods.Should().ContainSingle()
+            .Which.Coverage.Should().Be(0.7);
+    }
+
+    [Fact]
+    public void ArityRelaxedMatch_AmbiguousCandidates_Refuses()
+    {
+        var complexity = new[]
+        {
+            MakeComplexity("Find<T>", signature: "(int)")
+        };
+        var coverage = new[]
+        {
+            // Neither entry matches Find<T> exactly; both share its relaxed key.
+            MakeCoverage("Find`2", signature: "(System.Int32)", coverage: 0.9),
+            MakeCoverage("Find", signature: "(System.Int32)", coverage: 0.1)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
         result.Methods.Should().ContainSingle()
             .Which.Coverage.Should().Be(0.0);
+        result.Warnings.Should().Contain(w => w.Code == "UNMATCHED_METHODS");
     }
 
     // === Preserves order ===
