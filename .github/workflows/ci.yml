@@ -32,7 +32,7 @@ jobs:
         run: dotnet pack src/Crap4DotNet.Cli -o ./nupkg
 
       - name: Install dotnet-crap
-        run: dotnet tool install -g Crap4DotNet --add-source ./nupkg
+        run: dotnet tool install -g Crap4DotNet --configfile nuget.ci.config --prerelease
 
       - name: Self-analyze with CRAP metrics
         continue-on-error: true
