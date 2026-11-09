@@ -277,6 +277,16 @@ public sealed class MethodIdentityNormalizerTests
             .Should().Be("MyApp.Service.DoWork(int?)");
     }
 
+    [Theory]
+    [InlineData("(string?, int?)", "(string, int?)")]
+    [InlineData("(List<string?>, bool?)", "(List<string>, bool?)")]
+    [InlineData("(int?[], string[]?)", "(int?[], string[])")]
+    [InlineData("(MyStruct?)", "(MyStruct)")]
+    public void StripNullableReferenceAnnotations_KeepsValueTypeKeywordNullables(string input, string expected)
+    {
+        MethodKeyHelper.StripNullableReferenceAnnotations(input).Should().Be(expected);
+    }
+
     [Fact]
     public void Cobertura_ArrayType()
     {

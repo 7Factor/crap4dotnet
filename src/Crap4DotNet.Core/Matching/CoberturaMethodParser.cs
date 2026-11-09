@@ -67,7 +67,8 @@ public static class CoberturaMethodParser
         var className = NormalizeClassName(coverage.ClassName);
         var methodName = NormalizeMethodName(coverage.MethodName, className);
         var signature = NormalizeSignature(coverage.Signature);
-        return $"{className}.{methodName}{signature}";
+        return $"{className}.{methodName}"
+               + MethodKeyHelper.NormalizeSignatureForMatching(signature);
     }
 
     private static string NormalizeClassName(string className)
