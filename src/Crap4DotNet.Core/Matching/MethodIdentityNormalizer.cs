@@ -74,12 +74,7 @@ public static partial class MethodKeyHelper
         return result;
     }
 
-    /// <summary>
-    /// Strip the generic arity marker from the method-name segment only.
-    /// </summary>
-    /// <remarks>
-    /// Class-level arity is kept. Cobertura encodes it as a backtick (<c>Cache`1</c>).
-    /// </remarks>
+    // Class-level arity is kept because Cobertura records it on the class name (Cache`1).
     public static string StripMethodGenericArity(string namePart)
     {
         var depth = 0;
@@ -103,13 +98,7 @@ public static partial class MethodKeyHelper
         return namePart[..segStart] + segment[..open];
     }
 
-    /// <summary>
-    /// Fold the <c>out</c> and <c>in</c> parameter modifiers to <c>ref</c>.
-    /// </summary>
-    /// <remarks>
-    /// A CLR signature has one by-ref marker for all three modifiers.
-    /// <c>?</c> annotations are kept, so <c>Foo(int)</c> and <c>Foo(int?)</c> stay distinct.
-    /// </remarks>
+    // A CLR signature has one by-ref marker (&) for out, in, and ref.
     public static string NormalizeSignatureForMatching(string signature)
     {
         if (string.IsNullOrEmpty(signature) || signature == "()")
@@ -134,13 +123,8 @@ public static partial class MethodKeyHelper
         return "(" + string.Join(", ", reduced) + ")";
     }
 
-    /// <summary>
-    /// Remove <c>?</c> annotations that can be nullable reference types.
-    /// </summary>
-    /// <remarks>
-    /// <c>?</c> after a C# value-type keyword (<c>int?</c>) is <c>Nullable&lt;T&gt;</c> and is kept.
-    /// Source keys are syntactic, so <c>?</c> after any other type name is removed.
-    /// </remarks>
+    // Source keys come from syntax, so T? can be a nullable reference or a nullable struct.
+    // Only a value-type keyword proves Nullable<T>, so only that ? is kept.
     public static string StripNullableReferenceAnnotations(string signature) =>
         NullableAnnotationRegex().Replace(signature, match =>
             ValueTypeKeywords.Contains(match.Groups["type"].Value) ? match.Value : match.Groups["type"].Value);

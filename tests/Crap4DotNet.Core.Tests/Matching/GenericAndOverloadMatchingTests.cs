@@ -7,9 +7,6 @@ using Xunit;
 
 namespace Crap4DotNet.Core.Tests.Matching;
 
-/// <summary>
-/// Coverage matching for generic methods, parameter modifiers, nullable annotations, and overload sets.
-/// </summary>
 public sealed class GenericAndOverloadMatchingTests
 {
     private static MethodComplexityResult Source(string methodName, string signature, string className = "Helper") =>
@@ -114,7 +111,6 @@ public sealed class GenericAndOverloadMatchingTests
     [Fact]
     public void RelaxedMatch_SharedBySeveralSourceMethods_Refuses()
     {
-        // Foo<T>(int) and Foo(int) share the relaxed key Foo(int).
         var result = MethodCoverageMatcher.Match(
             [Source("Foo", "(int)"), Source("Foo<T>", "(int)")],
             [Cover("Foo", "(System.Int32)", 0.6)]);

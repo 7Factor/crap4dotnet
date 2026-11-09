@@ -6,7 +6,6 @@ namespace Crap4DotNet.Core.Matching;
 /// <summary>
 /// Performs a left-outer-join from complexity results to coverage entries per spec 6.4.
 /// Every source method produces a result; unmatched methods default to coverage 0.0.
-/// Matching passes, in order: exact canonical key, relaxed key, name-only key.
 /// </summary>
 public static class MethodCoverageMatcher
 {
@@ -56,8 +55,7 @@ public static class MethodCoverageMatcher
                 continue;
             }
 
-            // Pass 1b: Relaxed key. Match only when exactly one coverage entry and exactly
-            // one source method have this key.
+            // Pass 1b: Relaxed key
             var relaxedKey = RelaxKey(fullKey);
             if (relaxedKeyLookup.TryGetValue(relaxedKey, out var relaxedMatches)
                 && relaxedMatches.Count == 1
@@ -103,7 +101,6 @@ public static class MethodCoverageMatcher
             if (matchedFullKeys.Contains(kvp.Key))
                 continue;
 
-            // Check if matched by the relaxed or name-only fallback
             if (matchedRelaxedKeys.Contains(RelaxKey(kvp.Key)))
                 continue;
 
@@ -164,10 +161,7 @@ public static class MethodCoverageMatcher
         };
     }
 
-    /// <summary>
-    /// Canonical key without the method's generic arity and without nullable reference annotations.
-    /// Cobertura method names often have no arity, and CLR signatures have no nullable reference types.
-    /// </summary>
+    // Cobertura method names often omit generic arity, and CLR signatures have no nullable reference types.
     private static string RelaxKey(string canonicalKey)
     {
         var sigStart = MethodKeyHelper.FindSignatureStart(canonicalKey);
