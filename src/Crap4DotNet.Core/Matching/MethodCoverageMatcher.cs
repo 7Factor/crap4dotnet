@@ -165,7 +165,7 @@ public static class MethodCoverageMatcher
     }
 
     /// <summary>
-    /// Canonical key without the method's generic arity and without <c>?</c> annotations.
+    /// Canonical key without the method's generic arity and without nullable reference annotations.
     /// Cobertura method names often have no arity, and CLR signatures have no nullable reference types.
     /// </summary>
     private static string RelaxKey(string canonicalKey)
@@ -174,7 +174,7 @@ public static class MethodCoverageMatcher
         return sigStart < 0
             ? MethodKeyHelper.StripMethodGenericArity(canonicalKey)
             : MethodKeyHelper.StripMethodGenericArity(canonicalKey[..sigStart])
-              + canonicalKey[sigStart..].Replace("?", "", StringComparison.Ordinal);
+              + MethodKeyHelper.StripNullableReferenceAnnotations(canonicalKey[sigStart..]);
     }
 
     private static void AddToLookup(

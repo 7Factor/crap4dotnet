@@ -135,6 +135,26 @@ public static partial class MethodKeyHelper
     }
 
     /// <summary>
+    /// Remove <c>?</c> annotations that can be nullable reference types.
+    /// </summary>
+    /// <remarks>
+    /// <c>?</c> after a C# value-type keyword (<c>int?</c>) is <c>Nullable&lt;T&gt;</c> and is kept.
+    /// Source keys are syntactic, so <c>?</c> after any other type name is removed.
+    /// </remarks>
+    public static string StripNullableReferenceAnnotations(string signature) =>
+        NullableAnnotationRegex().Replace(signature, match =>
+            ValueTypeKeywords.Contains(match.Groups["type"].Value) ? match.Value : match.Groups["type"].Value);
+
+    private static readonly HashSet<string> ValueTypeKeywords = new(StringComparer.Ordinal)
+    {
+        "bool", "byte", "sbyte", "char", "decimal", "double", "float",
+        "int", "uint", "long", "ulong", "short", "ushort", "nint", "nuint",
+    };
+
+    [GeneratedRegex(@"(?<type>\w*)\?")]
+    private static partial Regex NullableAnnotationRegex();
+
+    /// <summary>
     /// Convert CLR backtick generic arity notation to angle bracket notation.
     /// Cache`1 → Cache&lt;&gt;, Dictionary`2 → Dictionary&lt;,&gt;
     /// </summary>

@@ -96,6 +96,22 @@ public sealed class GenericAndOverloadMatchingTests
     }
 
     [Fact]
+    public void NullableValueType_DoesNotTakeCoverageFromNonNullableOverload()
+    {
+        var result = MethodCoverageMatcher.Match(
+            [Source("Foo", "(int?)"), Source("Foo", "(bool)")],
+            [
+                Cover("Foo", "(System.Int32)", 0.9),
+                Cover("Foo", "(System.Boolean)", 0.2)
+            ]);
+
+        result.Methods[0].Coverage.Should().Be(0.0);
+        result.Methods[1].Coverage.Should().Be(0.2);
+        result.Warnings.Should().Contain(w => w.Code == "UNMATCHED_METHODS");
+        result.Warnings.Should().Contain(w => w.Code == "ORPHANED_COVERAGE");
+    }
+
+    [Fact]
     public void RelaxedMatch_SharedBySeveralSourceMethods_Refuses()
     {
         // Foo<T>(int) and Foo(int) share the relaxed key Foo(int).
