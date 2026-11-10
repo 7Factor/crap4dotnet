@@ -534,6 +534,25 @@ public class Service
         identity.LineNumber.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void Identity_LineRangeCoversTheDeclaration()
+    {
+        var results = Analyze("""
+            namespace MyApp;
+            public class Service
+            {
+                public int DoWork(int x)
+                {
+                    return x;
+                }
+            }
+            """);
+
+        var identity = results.Single().Identity;
+        identity.LineNumber.Should().Be(4);
+        identity.EndLineNumber.Should().Be(7);
+    }
+
     // === Top-level statements ===
 
     [Fact]

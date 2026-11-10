@@ -228,7 +228,7 @@ public static class CyclomaticComplexityWalker
             var ns = CurrentNamespace;
             var type = CurrentType;
             var fullName = BuildFullName(ns, type, methodName, signature);
-            var lineNumber = declarationNode.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            var lineSpan = declarationNode.GetLocation().GetLineSpan();
 
             _results.Add(new MethodComplexityResult
             {
@@ -240,7 +240,8 @@ public static class CyclomaticComplexityWalker
                     Signature = signature,
                     FullName = fullName,
                     FilePath = _filePath,
-                    LineNumber = lineNumber
+                    LineNumber = lineSpan.StartLinePosition.Line + 1,
+                    EndLineNumber = lineSpan.EndLinePosition.Line + 1
                 },
                 Complexity = counter.Count
             });

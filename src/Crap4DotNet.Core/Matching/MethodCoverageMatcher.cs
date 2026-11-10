@@ -1,5 +1,6 @@
 using Crap4DotNet.Core.Complexity;
 using Crap4DotNet.Core.Coverage;
+using Crap4DotNet.Core.Models;
 
 namespace Crap4DotNet.Core.Matching;
 
@@ -16,158 +17,146 @@ public static class MethodCoverageMatcher
         // Every pass assumes one entry per method, and each test project's report repeats
         // the assemblies it loads.
         var coverageEntries = CoverageMerger.Merge(reportedEntries);
+        var index = new CoverageIndex(complexityResults, coverageEntries);
 
-        // Build coverage lookups by normalized key
-        var fullKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
-        var relaxedKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
-        var nameKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
-
-        foreach (var entry in coverageEntries)
-        {
-            var fullKey = CoberturaMethodParser.ToCanonicalKey(entry);
-            AddToLookup(fullKeyLookup, fullKey, entry);
-
-            AddToLookup(relaxedKeyLookup, RelaxKey(fullKey), entry);
-
-            var nameKey = MethodKeyHelper.GetNameOnlyKey(fullKey);
-            AddToLookup(nameKeyLookup, nameKey, entry);
-        }
-
-        var matchedFullKeys = new HashSet<string>(StringComparer.Ordinal);
-        var matchedRelaxedKeys = new HashSet<string>(StringComparer.Ordinal);
-        var matchedNameKeys = new HashSet<string>(StringComparer.Ordinal);
         var methods = new List<MatchedMethod>();
         var unmatchedNames = new List<string>();
-        var warnings = new List<DiagnosticWarning>();
-        var sourceCountByRelaxedKey = complexityResults
-            .GroupBy(c => RelaxKey(RoslynMethodParser.ToCanonicalKey(c.Identity)), StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
-        var sourcesByNameKey = complexityResults
-            .GroupBy(c => MethodKeyHelper.GetNameOnlyKey(RoslynMethodParser.ToCanonicalKey(c.Identity)), StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
-
         foreach (var complexity in complexityResults)
         {
-            var fullKey = RoslynMethodParser.ToCanonicalKey(complexity.Identity);
-
-            // Pass 1: Exact match on full canonical key (includes signature)
-            if (fullKeyLookup.TryGetValue(fullKey, out var exactMatches))
-            {
-                matchedFullKeys.Add(fullKey);
-                methods.Add(new MatchedMethod
-                {
-                    Complexity = complexity,
-                    Coverage = exactMatches[0].Coverage
-                });
-                continue;
-            }
-
-            // Pass 1b: Relaxed key
-            var relaxedKey = RelaxKey(fullKey);
-            if (relaxedKeyLookup.TryGetValue(relaxedKey, out var relaxedMatches)
-                && relaxedMatches.Count == 1
-                && sourceCountByRelaxedKey[relaxedKey] == 1)
-            {
-                matchedRelaxedKeys.Add(relaxedKey);
-                methods.Add(new MatchedMethod
-                {
-                    Complexity = complexity,
-                    Coverage = relaxedMatches[0].Coverage
-                });
-                continue;
-            }
-
-            // Pass 2: Fallback to name-only key (without signature)
-            var nameKey = MethodKeyHelper.GetNameOnlyKey(fullKey);
-            if (nameKeyLookup.TryGetValue(nameKey, out var nameMatches)
-                && TryResolveByName(nameMatches, complexity, sourcesByNameKey[nameKey], out var nameCoverage))
-            {
-                matchedNameKeys.Add(nameKey);
-                methods.Add(new MatchedMethod
-                {
-                    Complexity = complexity,
-                    Coverage = nameCoverage
-                });
-                continue;
-            }
-
-            // No match found → default to 0.0
-            unmatchedNames.Add(complexity.Identity.FullName);
-            methods.Add(new MatchedMethod
-            {
-                Complexity = complexity,
-                Coverage = 0.0
-            });
-        }
-
-        // Count orphaned coverage entries (not matched by either pass)
-        var orphanedCount = 0;
-        var orphanedNames = new List<string>();
-
-        foreach (var kvp in fullKeyLookup)
-        {
-            if (matchedFullKeys.Contains(kvp.Key))
-                continue;
-
-            if (matchedRelaxedKeys.Contains(RelaxKey(kvp.Key)))
-                continue;
-
-            var nameKey = MethodKeyHelper.GetNameOnlyKey(kvp.Key);
-            if (matchedNameKeys.Contains(nameKey))
-                continue;
-
-            orphanedCount += kvp.Value.Count;
-            orphanedNames.AddRange(
-                kvp.Value.Select(c => $"{c.ClassName}.{c.MethodName}"));
-        }
-
-        // Emit warnings
-        if (unmatchedNames.Count > 0)
-        {
-            var preview = string.Join(", ", unmatchedNames.Take(5));
-            var suffix = unmatchedNames.Count > 5
-                ? $" and {unmatchedNames.Count - 5} more"
-                : "";
-            warnings.Add(new DiagnosticWarning
-            {
-                Code = "UNMATCHED_METHODS",
-                Message = $"{unmatchedNames.Count} method(s) have no coverage data (defaulting to 0.0): {preview}{suffix}"
-            });
-        }
-
-        if (orphanedCount > 0)
-        {
-            var preview = string.Join(", ", orphanedNames.Take(5));
-            var suffix = orphanedCount > 5
-                ? $" and {orphanedCount - 5} more"
-                : "";
-            warnings.Add(new DiagnosticWarning
-            {
-                Code = "ORPHANED_COVERAGE",
-                Message = $"{orphanedCount} coverage entry/entries have no matching source method: {preview}{suffix}"
-            });
-        }
-
-        // Version mismatch detection: >20% orphaned
-        if (coverageEntries.Count > 0)
-        {
-            var orphanedPercent = (double)orphanedCount / coverageEntries.Count * 100;
-            if (orphanedPercent > 20)
-            {
-                warnings.Add(new DiagnosticWarning
-                {
-                    Code = "COVERAGE_STALE",
-                    Message = $"Coverage data may be stale: {orphanedPercent:F0}% of coverage entries ({orphanedCount}/{coverageEntries.Count}) have no matching source method."
-                });
-            }
+            var coverage = index.Find(complexity);
+            if (coverage is null)
+                unmatchedNames.Add(complexity.Identity.FullName);
+            methods.Add(new MatchedMethod { Complexity = complexity, Coverage = coverage ?? 0.0 });
         }
 
         return new MatchResult
         {
             Methods = methods,
-            Warnings = warnings
+            Warnings = BuildWarnings(unmatchedNames, index.UnsplitEntries, index.OrphanedEntryNames(), coverageEntries.Count)
         };
     }
+
+    private sealed class CoverageIndex
+    {
+        private readonly Dictionary<string, List<CoberturaMethodCoverage>> _byFullKey = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, List<CoberturaMethodCoverage>> _byRelaxedKey = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, List<CoberturaMethodCoverage>> _byNameKey = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, List<MethodComplexityResult>> _sourcesByRelaxedKey;
+        private readonly Dictionary<string, List<MethodComplexityResult>> _sourcesByNameKey;
+        private readonly Dictionary<MethodIdentity, double?> _splitCoverage;
+        private readonly HashSet<string> _matchedFullKeys = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _matchedRelaxedKeys = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _matchedNameKeys = new(StringComparer.Ordinal);
+
+        public List<string> UnsplitEntries { get; } = [];
+
+        public CoverageIndex(
+            IReadOnlyList<MethodComplexityResult> complexityResults,
+            IReadOnlyList<CoberturaMethodCoverage> coverageEntries)
+        {
+            foreach (var entry in coverageEntries)
+            {
+                var fullKey = CoberturaMethodParser.ToCanonicalKey(entry);
+                AddToLookup(_byFullKey, fullKey, entry);
+                AddToLookup(_byRelaxedKey, RelaxKey(fullKey), entry);
+                AddToLookup(_byNameKey, MethodKeyHelper.GetNameOnlyKey(fullKey), entry);
+            }
+
+            _sourcesByRelaxedKey = GroupSources(complexityResults, RelaxKey);
+            _sourcesByNameKey = GroupSources(complexityResults, MethodKeyHelper.GetNameOnlyKey);
+            _splitCoverage = SplitSharedEntries(_sourcesByRelaxedKey, _byRelaxedKey, UnsplitEntries);
+        }
+
+        public double? Find(MethodComplexityResult complexity)
+        {
+            var fullKey = RoslynMethodParser.ToCanonicalKey(complexity.Identity);
+            var relaxedKey = RelaxKey(fullKey);
+            var nameKey = MethodKeyHelper.GetNameOnlyKey(fullKey);
+
+            if (_splitCoverage.TryGetValue(complexity.Identity, out var splitRate))
+            {
+                _matchedRelaxedKeys.Add(relaxedKey);
+                return splitRate;
+            }
+
+            if (_byFullKey.TryGetValue(fullKey, out var exact))
+            {
+                _matchedFullKeys.Add(fullKey);
+                return exact[0].Coverage;
+            }
+
+            if (_byRelaxedKey.TryGetValue(relaxedKey, out var relaxed)
+                && relaxed.Count == 1
+                && _sourcesByRelaxedKey[relaxedKey].Count == 1)
+            {
+                _matchedRelaxedKeys.Add(relaxedKey);
+                return relaxed[0].Coverage;
+            }
+
+            if (_byNameKey.TryGetValue(nameKey, out var byName)
+                && TryResolveByName(byName, complexity, _sourcesByNameKey[nameKey], out var nameRate))
+            {
+                _matchedNameKeys.Add(nameKey);
+                return nameRate;
+            }
+
+            return null;
+        }
+
+        public List<string> OrphanedEntryNames() =>
+            _byFullKey
+                .Where(kvp => !_matchedFullKeys.Contains(kvp.Key)
+                              && !_matchedRelaxedKeys.Contains(RelaxKey(kvp.Key))
+                              && !_matchedNameKeys.Contains(MethodKeyHelper.GetNameOnlyKey(kvp.Key)))
+                .SelectMany(kvp => kvp.Value.Select(c => $"{c.ClassName}.{c.MethodName}"))
+                .ToList();
+
+        private static Dictionary<string, List<MethodComplexityResult>> GroupSources(
+            IReadOnlyList<MethodComplexityResult> complexityResults, Func<string, string> toKey) =>
+            complexityResults
+                .GroupBy(c => toKey(RoslynMethodParser.ToCanonicalKey(c.Identity)), StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+    }
+
+    private static List<DiagnosticWarning> BuildWarnings(
+        List<string> unmatchedNames, List<string> unsplitEntries, List<string> orphanedNames, int entryCount)
+    {
+        var warnings = new List<DiagnosticWarning>();
+
+        if (unmatchedNames.Count > 0)
+            warnings.Add(new DiagnosticWarning
+            {
+                Code = "UNMATCHED_METHODS",
+                Message = $"{unmatchedNames.Count} method(s) have no coverage data (defaulting to 0.0): {Preview(unmatchedNames)}"
+            });
+
+        if (unsplitEntries.Count > 0)
+            warnings.Add(new DiagnosticWarning
+            {
+                Code = "SHARED_COVERAGE",
+                Message = $"{unsplitEntries.Count} coverage entry/entries each cover several methods and have no line data to split them, so those methods' coverage may be wrong: {Preview(unsplitEntries)}"
+            });
+
+        if (orphanedNames.Count > 0)
+            warnings.Add(new DiagnosticWarning
+            {
+                Code = "ORPHANED_COVERAGE",
+                Message = $"{orphanedNames.Count} coverage entry/entries have no matching source method: {Preview(orphanedNames)}"
+            });
+
+        var orphanedPercent = entryCount == 0 ? 0 : (double)orphanedNames.Count / entryCount * 100;
+        if (orphanedPercent > 20)
+            warnings.Add(new DiagnosticWarning
+            {
+                Code = "COVERAGE_STALE",
+                Message = $"Coverage data may be stale: {orphanedPercent:F0}% of coverage entries ({orphanedNames.Count}/{entryCount}) have no matching source method."
+            });
+
+        return warnings;
+    }
+
+    private static string Preview(List<string> names) =>
+        string.Join(", ", names.Take(5)) + (names.Count > 5 ? $" and {names.Count - 5} more" : "");
 
     // Cobertura method names often omit generic arity, and CLR signatures have no nullable reference types.
     private static string RelaxKey(string canonicalKey)
@@ -178,6 +167,43 @@ public static class MethodCoverageMatcher
             : MethodKeyHelper.StripMethodGenericArity(canonicalKey[..sigStart])
               + MethodKeyHelper.StripNullableReferenceAnnotations(canonicalKey[sigStart..]);
     }
+
+    // Coverlet writes one entry for Foo(int) and Foo<T>(int), holding the lines of both.
+    private static Dictionary<MethodIdentity, double?> SplitSharedEntries(
+        Dictionary<string, List<MethodComplexityResult>> sourcesByRelaxedKey,
+        Dictionary<string, List<CoberturaMethodCoverage>> relaxedKeyLookup,
+        List<string> unsplitEntries)
+    {
+        var rates = new Dictionary<MethodIdentity, double?>();
+        foreach (var (key, sources) in sourcesByRelaxedKey)
+        {
+            if (sources.Count < 2 || !relaxedKeyLookup.TryGetValue(key, out var entries) || entries.Count != 1)
+                continue;
+
+            var entry = entries[0];
+            if (!CanSplit(entry, sources))
+            {
+                unsplitEntries.Add($"{entry.ClassName}.{entry.MethodName}");
+                continue;
+            }
+
+            foreach (var source in sources)
+            {
+                var lines = entry.Lines!
+                    .Where(l => l.Number >= source.Identity.LineNumber && l.Number <= source.Identity.EndLineNumber)
+                    .ToList();
+                rates[source.Identity] = lines.Count == 0 ? null : CoverageRate.FromLines(lines);
+            }
+        }
+
+        return rates;
+    }
+
+    private static bool CanSplit(CoberturaMethodCoverage entry, List<MethodComplexityResult> sources) =>
+        entry.Lines is not null
+        && sources.TrueForAll(s => s.Identity.LineNumber is not null
+                                   && s.Identity.EndLineNumber is not null
+                                   && SameFile(s.Identity.FilePath, entry.FileName));
 
     // Async and iterator entries have no signature, so overloads share a name key.
     // Their state machines keep the source line numbers, so overloads pair up by line order.

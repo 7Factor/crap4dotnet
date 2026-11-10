@@ -13,6 +13,7 @@ public sealed record MethodIdentity
     public required string FullName { get; init; }
     public string? FilePath { get; init; }
     public int? LineNumber { get; init; }
+    public int? EndLineNumber { get; init; }
 
     public bool Equals(MethodIdentity? other) =>
         other is not null && string.Equals(FullName, other.FullName, StringComparison.Ordinal);

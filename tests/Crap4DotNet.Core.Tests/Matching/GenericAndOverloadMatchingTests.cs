@@ -9,7 +9,8 @@ namespace Crap4DotNet.Core.Tests.Matching;
 
 public sealed class GenericAndOverloadMatchingTests
 {
-    private static MethodComplexityResult Source(string methodName, string signature, string className = "Helper") =>
+    private static MethodComplexityResult Source(string methodName, string signature, string className = "Helper",
+        int line = 1, int? endLine = null) =>
         new()
         {
             Identity = new MethodIdentity
@@ -20,14 +21,26 @@ public sealed class GenericAndOverloadMatchingTests
                 Signature = signature,
                 FullName = $"MyApp.{className}.{methodName}{signature}",
                 FilePath = "Test.cs",
-                LineNumber = 1
+                LineNumber = line,
+                EndLineNumber = endLine
             },
             Complexity = 10
         };
 
     private static CoberturaMethodCoverage Cover(string methodName, string signature, double coverage,
-        string className = "MyApp.Helper") =>
-        new() { ClassName = className, MethodName = methodName, Signature = signature, Coverage = coverage };
+        string className = "MyApp.Helper", IReadOnlyList<CoberturaLine>? lines = null) =>
+        new()
+        {
+            ClassName = className,
+            MethodName = methodName,
+            Signature = signature,
+            Coverage = coverage,
+            FileName = "Test.cs",
+            Lines = lines
+        };
+
+    private static CoberturaLine Line(int number, bool hit, int branchesCovered = 0, int branchesTotal = 0) =>
+        new() { Number = number, Hit = hit, BranchesCovered = branchesCovered, BranchesTotal = branchesTotal };
 
     [Fact]
     public void GenericMethod_WithByRefOutParameter_TakesItsCoverage()
@@ -109,14 +122,39 @@ public sealed class GenericAndOverloadMatchingTests
     }
 
     [Fact]
-    public void RelaxedMatch_SharedBySeveralSourceMethods_Refuses()
+    public void SharedEntry_SplitsCoverageByEachMethodsLines()
     {
         var result = MethodCoverageMatcher.Match(
-            [Source("Foo", "(int)"), Source("Foo<T>", "(int)")],
+            [Source("Foo", "(int)", line: 4, endLine: 4), Source("Foo<T>", "(int)", line: 5, endLine: 5)],
+            [Cover("Foo", "(System.Int32)", 0.5, lines: [Line(4, hit: false, 0, 2), Line(5, hit: true, 2, 2)])]);
+
+        result.Methods[0].Coverage.Should().Be(0.0);
+        result.Methods[1].Coverage.Should().Be(1.0);
+        result.Warnings.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SharedEntry_MethodWithNoLinesInTheEntry_IsUnmatched()
+    {
+        var result = MethodCoverageMatcher.Match(
+            [Source("Foo", "(int)", line: 4, endLine: 6), Source("Foo<T>", "(int)", line: 8, endLine: 10)],
+            [Cover("Foo", "(System.Int32)", 0.5, lines: [Line(5, hit: true), Line(6, hit: false)])]);
+
+        result.Methods[0].Coverage.Should().Be(0.5);
+        result.Methods[1].Coverage.Should().Be(0.0);
+        result.Warnings.Should().ContainSingle(w => w.Code == "UNMATCHED_METHODS");
+    }
+
+    [Fact]
+    public void SharedEntry_WithoutLineData_WarnsThatItCannotBeSplit()
+    {
+        var result = MethodCoverageMatcher.Match(
+            [Source("Foo", "(int)", line: 4, endLine: 4), Source("Foo<T>", "(int)", line: 5, endLine: 5)],
             [Cover("Foo", "(System.Int32)", 0.6)]);
 
         result.Methods[0].Coverage.Should().Be(0.6);
         result.Methods[1].Coverage.Should().Be(0.0);
+        result.Warnings.Should().Contain(w => w.Code == "SHARED_COVERAGE" && w.Message.Contains("MyApp.Helper.Foo"));
     }
 
     [Fact]
