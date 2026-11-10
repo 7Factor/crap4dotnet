@@ -15,6 +15,7 @@
     <PackageProjectUrl>https://github.com/7Factor/crap4dotnet</PackageProjectUrl>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>dotnet-crap</ToolCommandName>
+    <RollForward>Major</RollForward>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 

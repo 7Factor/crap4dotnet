@@ -510,7 +510,7 @@ with no lines in the entry is unmatched. When the entry has no line data, the to
 
 ### 6.5 Multi-Project Solution Handling
 
-When the tool is given a `.sln` (solution) file, it analyzes all non-test projects in the
+When the tool is given a `.sln` or `.slnx` (solution) file, it analyzes all non-test projects in the
 solution and produces a **single merged report**.
 
 #### 6.5.1 Behavior
@@ -540,7 +540,7 @@ solution and produces a **single merged report**.
 3. **Single report**: The output is one JSON report with all methods from all projects. The
    `hierarchy` section groups by namespace (which naturally separates projects since .NET projects
    typically use distinct root namespaces).
-4. **Project field**: The top-level `project` field uses the solution name (without `.sln`).
+4. **Project field**: The top-level `project` field uses the solution name (without `.sln` or `.slnx`).
 
 #### 6.5.2 Coverage Auto-Discovery for Solutions
 
@@ -634,7 +634,7 @@ This ensures AI agents can always parse error information programmatically.
 
 | Code | Exit Code | Description |
 |---|---|---|
-| `SOURCE_NOT_FOUND` | 2 | The specified .cs/.csproj/.sln file does not exist |
+| `SOURCE_NOT_FOUND` | 2 | The specified .cs/.csproj/.sln/.slnx file does not exist |
 | `COVERAGE_FILE_NOT_FOUND` | 2 | The specified or auto-discovered coverage file does not exist |
 | `COVERAGE_PARSE_ERROR` | 2 | Coverage XML is malformed or uses an unsupported format |
 | `SOURCE_PARSE_ERROR` | 2 | C# source file has syntax errors preventing analysis |
@@ -646,6 +646,7 @@ This ensures AI agents can always parse error information programmatically.
 | `THRESHOLD_MISSING` | 2 | A diff input report has no `threshold` |
 | `THRESHOLD_MISMATCH` | 2 | The two diff input reports have different thresholds |
 | `IO_ERROR` | 2 | File system error (permissions, disk full, etc.) |
+| `UNSUPPORTED_TEST_RUNNER` | 2 | `--run-tests` was used where `global.json` selects Microsoft.Testing.Platform, which does not support the VSTest coverage collector |
 
 ### 8.3 Warning Output
 

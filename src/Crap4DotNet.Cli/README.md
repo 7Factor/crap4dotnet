@@ -10,6 +10,8 @@ CRAP combines cyclomatic complexity with code coverage to identify methods that 
 dotnet tool install -g Crap4DotNet
 ```
 
+Requires .NET 8.0 or later.
+
 ## Usage
 
 ```bash
@@ -28,6 +30,10 @@ dotnet-crap analyze ./src/MyProject --coverage ./coverage.xml --threshold 15
 # Compare two reports
 dotnet-crap diff before.json after.json
 ```
+
+## Microsoft.Testing.Platform
+
+`--run-tests` uses the VSTest coverage collector. When `global.json` selects Microsoft.Testing.Platform as the test runner, it exits 2 with `UNSUPPORTED_TEST_RUNNER`. Generate Cobertura coverage with the `Microsoft.Testing.Extensions.CodeCoverage` package and pass it with `--coverage`.
 
 ## Configuration
 

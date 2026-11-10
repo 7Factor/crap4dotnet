@@ -11,7 +11,7 @@ internal static class AnalyzeCommand
 {
     public static Command Create()
     {
-        var pathArg = new Argument<string>("path", "Path to .cs file, directory, .csproj, or .sln");
+        var pathArg = new Argument<string>("path", "Path to .cs file, directory, .csproj, .sln, or .slnx");
         var coverageOpt = new Option<string[]>("--coverage", "Path(s) to Cobertura XML coverage file(s)")
         {
             AllowMultipleArgumentsPerToken = true
@@ -55,7 +55,7 @@ internal static class AnalyzeCommand
         if (runTests && path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
         {
             ErrorOutput.WriteError("INVALID_CONFIGURATION",
-                "--run-tests requires a .csproj, .sln, or directory path, not a .cs file.");
+                "--run-tests requires a .csproj, .sln, .slnx, or directory path, not a .cs file.");
             Environment.ExitCode = 2;
             return;
         }
@@ -191,6 +191,17 @@ internal static class AnalyzeCommand
 
     private static List<string>? RunTests(string path)
     {
+        // dotnet test reads the runner from the global.json of its working directory.
+        var testingPlatformConfig = TestRunner.FindTestingPlatformGlobalJson(Directory.GetCurrentDirectory());
+        if (testingPlatformConfig is not null)
+        {
+            ErrorOutput.WriteError("UNSUPPORTED_TEST_RUNNER",
+                "--run-tests collects coverage with the VSTest collector, which Microsoft.Testing.Platform does not support. "
+                + "Generate Cobertura coverage with a Microsoft.Testing.Platform coverage extension and pass it with --coverage.",
+                file: testingPlatformConfig);
+            return null;
+        }
+
         var target = Path.GetFullPath(path);
         var resultsDir = Path.Combine(
             Directory.Exists(target) ? target : Path.GetDirectoryName(target)!,
@@ -266,7 +277,7 @@ internal static class AnalyzeCommand
         {
             ".CS" => ([fullPath], name),
             ".CSPROJ" => (FindSourceFiles(directory, excludeTests: false), name),
-            ".SLN" => (FindSourceFiles(directory, excludeTests: true), name),
+            ".SLN" or ".SLNX" => (FindSourceFiles(directory, excludeTests: true), name),
             _ => throw new CrapCliException("SOURCE_NOT_FOUND", $"Unsupported source path: {path}", path)
         };
     }
