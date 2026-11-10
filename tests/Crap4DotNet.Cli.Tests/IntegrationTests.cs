@@ -272,13 +272,21 @@ public sealed class IntegrationTests : IDisposable
     }
 
     [Theory]
-    [InlineData("App.sln")]
-    [InlineData("App.slnx")]
-    public void Analyze_SolutionPath_ExcludesTestDirectories(string solutionFile)
+    [InlineData("App.sln", """
+        Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "App", "App\App.csproj", "{B5981DA5-7143-4580-A3C8-7B9B677BE0E6}"
+        EndProject
+        Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "App.Tests", "App.Tests\App.Tests.csproj", "{2ABDB9E4-9D58-4D19-8158-18F15452AEA7}"
+        EndProject
+        """)]
+    [InlineData("App.slnx", """<Solution><Project Path="App/App.csproj" /><Project Path="App.Tests/App.Tests.csproj" /></Solution>""")]
+    public void Analyze_SolutionPath_ExcludesTestProjects(string solutionFile, string solutionContent)
     {
-        var solution = CreateFile(solutionFile, "");
-        CreateFile("src/Service.cs", "namespace MyApp; public class Service { public void M() {} }");
-        CreateFile("tests/ServiceTests.cs", "namespace MyApp; public class ServiceTests { public void T() {} }");
+        var solution = CreateFile(solutionFile, solutionContent);
+        CreateFile("App/App.csproj", """<Project Sdk="Microsoft.NET.Sdk" />""");
+        CreateFile("App/Service.cs", "namespace MyApp; public class Service { public void M() {} }");
+        CreateFile("App.Tests/App.Tests.csproj",
+            """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="xunit" /></ItemGroup></Project>""");
+        CreateFile("App.Tests/ServiceTests.cs", "namespace MyApp; public class ServiceTests { public void T() {} }");
 
         var (_, stdout, _) = InvokeAnalyze(solution, "--coverage", CreateEmptyCoverage());
 

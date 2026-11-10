@@ -4,6 +4,7 @@ using Crap4DotNet.Core.Analysis;
 using Crap4DotNet.Core.Configuration;
 using Crap4DotNet.Core.Coverage;
 using Crap4DotNet.Core.Reporting;
+using Crap4DotNet.Core.Sources;
 
 namespace Crap4DotNet.Cli.Commands;
 
@@ -269,27 +270,28 @@ internal static class AnalyzeCommand
 
         var fullPath = Path.GetFullPath(path);
         if (Directory.Exists(fullPath))
-            return (FindSourceFiles(fullPath, excludeTests: false), Path.GetFileName(fullPath));
+            return (SourceFiles.InDirectory(fullPath), Path.GetFileName(fullPath));
 
-        var directory = Path.GetDirectoryName(fullPath)!;
         var name = Path.GetFileNameWithoutExtension(fullPath);
         return Path.GetExtension(fullPath).ToUpperInvariant() switch
         {
             ".CS" => ([fullPath], name),
-            ".CSPROJ" => (FindSourceFiles(directory, excludeTests: false), name),
-            ".SLN" or ".SLNX" => (FindSourceFiles(directory, excludeTests: true), name),
+            ".CSPROJ" => (SourceFiles.InDirectory(Path.GetDirectoryName(fullPath)!), name),
+            ".SLN" or ".SLNX" => (SolutionSourceFiles(fullPath), name),
             _ => throw new CrapCliException("SOURCE_NOT_FOUND", $"Unsupported source path: {path}", path)
         };
     }
 
-    private static List<string> FindSourceFiles(string directory, bool excludeTests)
+    private static List<string> SolutionSourceFiles(string solutionPath)
     {
-        var separator = Path.DirectorySeparatorChar;
-        return Directory.GetFiles(directory, "*.cs", SearchOption.AllDirectories)
-            .Where(f => !f.Contains($"{separator}obj{separator}")
-                     && !f.Contains($"{separator}bin{separator}")
-                     && !(excludeTests && f.Contains($"{separator}test", StringComparison.OrdinalIgnoreCase)))
-            .ToList();
+        try
+        {
+            return SourceFiles.InSolution(solutionPath);
+        }
+        catch (InvalidSourceException ex)
+        {
+            throw new CrapCliException(ex.Code, ex.Message, ex.FilePath);
+        }
     }
 
     private static List<string> ResolveCoveragePaths(string[] coveragePaths, string sourcePath)
