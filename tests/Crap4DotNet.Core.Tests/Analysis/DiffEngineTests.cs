@@ -44,7 +44,7 @@ public sealed class DiffEngineTests
         var before = MakeReport();
         var after = MakeReport(("MyApp.Service.New()", 5.0, 2, 0.8));
 
-        var result = DiffEngine.Compare(before, after, 30);
+        var result = DiffEngine.Compare(before, after);
 
         result.Added.Should().ContainSingle()
             .Which.Status.Should().Be("added");
@@ -57,7 +57,7 @@ public sealed class DiffEngineTests
         var before = MakeReport(("MyApp.Service.Old()", 85.0, 20, 0.1));
         var after = MakeReport();
 
-        var result = DiffEngine.Compare(before, after, 30);
+        var result = DiffEngine.Compare(before, after);
 
         result.Removed.Should().ContainSingle();
         result.Removed[0].Status.Should().Be("removed");
@@ -71,7 +71,7 @@ public sealed class DiffEngineTests
         var before = MakeReport(("MyApp.Service.M()", 25.0, 8, 0.5));
         var after = MakeReport(("MyApp.Service.M()", 45.0, 12, 0.2));
 
-        var result = DiffEngine.Compare(before, after, 30);
+        var result = DiffEngine.Compare(before, after);
 
         result.NewCrappy.Should().ContainSingle()
             .Which.Status.Should().Be("new_crappy");
@@ -83,7 +83,7 @@ public sealed class DiffEngineTests
         var before = MakeReport(("MyApp.Service.M()", 45.0, 12, 0.2));
         var after = MakeReport(("MyApp.Service.M()", 12.0, 12, 0.95));
 
-        var result = DiffEngine.Compare(before, after, 30);
+        var result = DiffEngine.Compare(before, after);
 
         result.FixedCrappy.Should().ContainSingle()
             .Which.Status.Should().Be("fixed");
@@ -96,7 +96,7 @@ public sealed class DiffEngineTests
         var before = MakeReport(("MyApp.Service.M()", 25.0, 8, 0.5));
         var after = MakeReport(("MyApp.Service.M()", 35.0, 10, 0.3));
 
-        var result = DiffEngine.Compare(before, after, 30);
+        var result = DiffEngine.Compare(before, after);
 
         result.NewCrappy.Should().ContainSingle();
         result.Regressed.Should().BeEmpty();
@@ -109,7 +109,7 @@ public sealed class DiffEngineTests
         var before = MakeReport(("MyApp.Service.M()", 50.0, 15, 0.1));
         var after = MakeReport(("MyApp.Service.M()", 25.0, 15, 0.8));
 
-        var result = DiffEngine.Compare(before, after, 30);
+        var result = DiffEngine.Compare(before, after);
 
         result.FixedCrappy.Should().ContainSingle();
         result.Improved.Should().BeEmpty();
@@ -121,7 +121,7 @@ public sealed class DiffEngineTests
         var before = MakeReport(("MyApp.Service.M()", 5.0, 2, 0.9));
         var after = MakeReport(("MyApp.Service.M()", 15.0, 5, 0.5));
 
-        var result = DiffEngine.Compare(before, after, 30);
+        var result = DiffEngine.Compare(before, after);
 
         result.Regressed.Should().ContainSingle();
         result.Regressed[0].Delta.Should().Be(10.0);
@@ -133,7 +133,7 @@ public sealed class DiffEngineTests
         var before = MakeReport(("MyApp.Service.M()", 80.0, 20, 0.1));
         var after = MakeReport(("MyApp.Service.M()", 50.0, 20, 0.4));
 
-        var result = DiffEngine.Compare(before, after, 30);
+        var result = DiffEngine.Compare(before, after);
 
         result.Improved.Should().ContainSingle();
         result.Improved[0].Delta.Should().Be(-30.0);
@@ -145,7 +145,7 @@ public sealed class DiffEngineTests
         var before = MakeReport(("MyApp.Service.M()", 10.0, 3, 0.8));
         var after = MakeReport(("MyApp.Service.M()", 10.0, 3, 0.8));
 
-        var result = DiffEngine.Compare(before, after, 30);
+        var result = DiffEngine.Compare(before, after);
 
         result.Added.Should().BeEmpty();
         result.Removed.Should().BeEmpty();
@@ -164,7 +164,7 @@ public sealed class DiffEngineTests
             ("MyApp.Service.A()", 5.0, 2, 0.9),
             ("MyApp.Service.B()", 10.0, 3, 0.7));
 
-        var result = DiffEngine.Compare(before, after, 30);
+        var result = DiffEngine.Compare(before, after);
 
         result.Added.Should().HaveCount(2);
         result.Summary.Added.Should().Be(2);
@@ -178,7 +178,7 @@ public sealed class DiffEngineTests
             ("MyApp.Service.B()", 10.0, 3, 0.7));
         var after = MakeReport();
 
-        var result = DiffEngine.Compare(before, after, 30);
+        var result = DiffEngine.Compare(before, after);
 
         result.Removed.Should().HaveCount(2);
         result.Summary.Removed.Should().Be(2);
@@ -203,7 +203,7 @@ public sealed class DiffEngineTests
             ("MyApp.E()", 15.0, 5, 0.5),   // regressed
             ("MyApp.F()", 8.0, 3, 0.7));   // added
 
-        var result = DiffEngine.Compare(before, after, 30);
+        var result = DiffEngine.Compare(before, after);
 
         result.Summary.NewCrappy.Should().Be(1);
         result.Summary.FixedCrappy.Should().Be(1);
@@ -211,5 +211,42 @@ public sealed class DiffEngineTests
         result.Summary.Removed.Should().Be(1);
         result.Summary.Regressed.Should().Be(1);
         result.Summary.Added.Should().Be(1);
+    }
+
+    private static JsonDocument ReportWithThreshold(string thresholdProperty) =>
+        JsonDocument.Parse($$"""{ {{thresholdProperty}} "methods": [] }""");
+
+    [Theory]
+    [InlineData("", "\"threshold\": 30,", "before")]
+    [InlineData("\"threshold\": 30,", "", "after")]
+    public void Compare_ReportWithoutThreshold_Throws(string before, string after, string missing)
+    {
+        var act = () => DiffEngine.Compare(ReportWithThreshold(before), ReportWithThreshold(after));
+
+        act.Should().Throw<InvalidDiffInputException>()
+            .Where(e => e.Code == "THRESHOLD_MISSING" && e.Message.Contains(missing));
+    }
+
+    [Fact]
+    public void Compare_DifferentThresholds_Throws()
+    {
+        var act = () => DiffEngine.Compare(
+            ReportWithThreshold("\"threshold\": 30,"), ReportWithThreshold("\"threshold\": 15,"));
+
+        act.Should().Throw<InvalidDiffInputException>()
+            .Where(e => e.Code == "THRESHOLD_MISMATCH");
+    }
+
+    [Fact]
+    public void Compare_UsesTheReportsThreshold()
+    {
+        var before = ReportWithThreshold("\"threshold\": 10,");
+        var after = JsonDocument.Parse("""
+            { "threshold": 10, "methods": [ { "fullName": "A.New()", "crap": 12.0 } ] }
+            """);
+
+        var result = DiffEngine.Compare(before, after);
+
+        result.Added.Single().IsCrappy.Should().BeTrue();
     }
 }

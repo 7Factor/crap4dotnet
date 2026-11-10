@@ -10,14 +10,14 @@ crap4dotnet calculates CRAP (Change Risk Anti-Patterns) metrics for .NET code. I
 
 ```bash
 dotnet build                              # build all projects
-dotnet test                               # run all tests (217 core + 23 CLI)
+dotnet test                               # run all tests
 dotnet test --filter "FullyQualifiedName~SummaryReportWriter"  # run tests matching a name
 dotnet test tests/Crap4DotNet.Core.Tests  # run one test project
 dotnet test tests/Crap4DotNet.Cli.Tests   # run CLI integration tests
 
 # install tool locally for manual testing
 dotnet pack src/Crap4DotNet.Cli -o ./nupkg
-dotnet tool install -g Crap4DotNet --add-source ./nupkg
+dotnet tool install -g Crap4DotNet --configfile nuget.ci.config --prerelease   # --add-source fails under package source mapping
 
 # run the tool
 dotnet-crap analyze ./crap4dotnet.sln --run-tests --output report.json
@@ -60,6 +60,15 @@ CLI (System.CommandLine)              Core Library
 - **Warnings are errors** — all projects via `Directory.Build.props`
 - Analyzer level: `latest-recommended` (CA1305 etc. enforced — use `CultureInfo.InvariantCulture` for all formatting)
 - xUnit + FluentAssertions + NSubstitute for tests
+- SDK pinned in `global.json`. Restore uses `packages.lock.json`, and CI restores with `--locked-mode`, so commit the lock files after changing a package version.
+
+## CI
+
+- `build.yml` is a reusable workflow (locked restore, Release build, tests with coverage, pack). `ci.yml` and `publish.yml` both call it, so a release is built and tested the same way as CI.
+- `ci.yml` analyzes the repo with its own packed tool. The `crap` job fails when any method is over the CRAP threshold.
+- `crap4dotnet-config.json` sets this repo's CRAP threshold. Change it there, not with `--threshold` in CI.
+- `global.json` is the only place the SDK version is set. Every job installs it through `.github/actions/setup-dotnet`.
+- Actions are pinned to commit SHAs. Update the SHA and the version comment together.
 
 ## Key Conventions
 

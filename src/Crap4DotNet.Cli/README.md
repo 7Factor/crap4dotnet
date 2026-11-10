@@ -22,11 +22,23 @@ dotnet-crap analyze ./src/MyProject --coverage ./TestResults/coverage.cobertura.
 # Write report to file
 dotnet-crap analyze ./src/MyProject --coverage ./coverage.xml --output report.json
 
-# Custom threshold (default: 30)
+# Custom threshold for one run (default: 30)
 dotnet-crap analyze ./src/MyProject --coverage ./coverage.xml --threshold 15
 
 # Compare two reports
 dotnet-crap diff before.json after.json
+```
+
+## Configuration
+
+To set a project's threshold, commit a `crap4dotnet-config.json` at its root. `analyze` uses the nearest one in the analyzed path's directory or a parent. `--threshold` overrides it.
+
+```json
+{
+  "crap": {
+    "threshold": 30
+  }
+}
 ```
 
 ## Exit Codes

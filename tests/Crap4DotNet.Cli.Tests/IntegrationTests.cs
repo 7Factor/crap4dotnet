@@ -1,6 +1,8 @@
 using System.CommandLine;
+using System.Globalization;
 using System.Text.Json;
 using Crap4DotNet.Cli.Commands;
+using Crap4DotNet.Core.Configuration;
 using FluentAssertions;
 using Xunit;
 
@@ -241,6 +243,95 @@ public sealed class IntegrationTests : IDisposable
         doc.RootElement.GetProperty("methods").GetArrayLength().Should().BeGreaterOrEqualTo(2);
     }
 
+    private string CreateEmptyCoverage() => CreateFile("coverage.cobertura.xml", """
+        <?xml version="1.0" encoding="utf-8"?>
+        <coverage line-rate="1.0" version="1.0" timestamp="0"><packages /></coverage>
+        """);
+
+    private static (string project, string[] methods) ReportProjectAndMethods(string stdout)
+    {
+        var root = JsonDocument.Parse(stdout).RootElement;
+        return (root.GetProperty("project").GetString()!,
+            root.GetProperty("methods").EnumerateArray()
+                .Select(m => m.GetProperty("fullName").GetString()!).Order().ToArray());
+    }
+
+    [Fact]
+    public void Analyze_CsprojPath_AnalyzesItsDirectoryExceptBinAndObj()
+    {
+        var project = CreateFile("App/App.csproj", "<Project />");
+        CreateFile("App/Service.cs", "namespace MyApp; public class Service { public void M() {} }");
+        CreateFile("App/obj/Generated.cs", "namespace MyApp; public class Generated { public void G() {} }");
+        CreateFile("App/bin/Copied.cs", "namespace MyApp; public class Copied { public void C() {} }");
+
+        var (_, stdout, _) = InvokeAnalyze(project, "--coverage", CreateEmptyCoverage());
+
+        var (projectName, methods) = ReportProjectAndMethods(stdout);
+        projectName.Should().Be("App");
+        methods.Should().Equal("MyApp.Service.M()");
+    }
+
+    [Fact]
+    public void Analyze_SlnPath_ExcludesTestDirectories()
+    {
+        var solution = CreateFile("App.sln", "");
+        CreateFile("src/Service.cs", "namespace MyApp; public class Service { public void M() {} }");
+        CreateFile("tests/ServiceTests.cs", "namespace MyApp; public class ServiceTests { public void T() {} }");
+
+        var (_, stdout, _) = InvokeAnalyze(solution, "--coverage", CreateEmptyCoverage());
+
+        var (projectName, methods) = ReportProjectAndMethods(stdout);
+        projectName.Should().Be("App");
+        methods.Should().Equal("MyApp.Service.M()");
+    }
+
+    [Fact]
+    public void Analyze_UnsupportedFileType_Exit2()
+    {
+        var path = CreateFile("notes.txt", "");
+
+        var (exitCode, _, stderr) = InvokeAnalyze(path, "--coverage", CreateEmptyCoverage());
+
+        exitCode.Should().Be(2);
+        JsonDocument.Parse(stderr).RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("SOURCE_NOT_FOUND");
+    }
+
+    [Fact]
+    public void FindCoverageFiles_ReturnsEveryCoverageFile()
+    {
+        var first = CreateFile("results/a/coverage.cobertura.xml", "");
+        var second = CreateFile("results/b/coverage.cobertura.xml", "");
+
+        AnalyzeCommand.FindCoverageFiles(Path.Combine(_tempDir, "results"))
+            .Should().BeEquivalentTo([first, second]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FindCoverageFiles_NoCoverage_ReturnsNull(bool resultsDirExists)
+    {
+        var resultsDir = Path.Combine(_tempDir, "results");
+        if (resultsDirExists)
+            Directory.CreateDirectory(resultsDir);
+
+        var stderr = new StringWriter();
+        var originalErr = Console.Error;
+        Console.SetError(stderr);
+        try
+        {
+            AnalyzeCommand.FindCoverageFiles(resultsDir).Should().BeNull();
+        }
+        finally
+        {
+            Console.SetError(originalErr);
+        }
+
+        JsonDocument.Parse(stderr.ToString()).RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("COVERAGE_FILE_NOT_FOUND");
+    }
+
     [Fact]
     public void FullPipeline_OutputToFile()
     {
@@ -287,6 +378,60 @@ public sealed class IntegrationTests : IDisposable
 
         // comp=1, cov=0.5 → CRAP = 1*(1-0.5)^3 + 1 = 0.125 + 1 = 1.125, threshold=1 → crappy
         exitCode.Should().Be(1);
+    }
+
+    private const double HalfCoveredMethodCrap = 1.125;
+
+    private (string source, string coverage) CreateHalfCoveredMethod()
+    {
+        var source = CreateFile("src/Simple.cs",
+            "namespace MyApp; public class Simple { public int Add(int a, int b) => a + b; }");
+        var coverage = CreateFile("src/coverage.cobertura.xml", """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage line-rate="0.5" version="1.0" timestamp="0">
+              <packages><package name="MyApp" line-rate="0.5"><classes>
+                <class name="MyApp.Simple" filename="Simple.cs" line-rate="0.5">
+                  <methods><method name="Add" signature="(System.Int32, System.Int32)" line-rate="0.5" /></methods>
+                </class></classes></package></packages>
+            </coverage>
+            """);
+        return (source, coverage);
+    }
+
+    private static int ReportThreshold(string stdout) =>
+        JsonDocument.Parse(stdout).RootElement.GetProperty("threshold").GetInt32();
+
+    [Theory]
+    [InlineData(null, null, CrapOptions.DefaultThreshold)]
+    [InlineData(1, null, 1)]
+    [InlineData(1, 50, 50)]
+    public void Analyze_Threshold_FlagThenConfigFileThenDefault(int? configThreshold, int? flag, int expected)
+    {
+        if (configThreshold is not null)
+            CreateFile(ConfigFile.FileName, $$"""{ "crap": { "threshold": {{configThreshold}} } }""");
+        var (source, coverage) = CreateHalfCoveredMethod();
+        var args = new List<string> { source, "--coverage", coverage };
+        if (flag is not null)
+            args.AddRange(["--threshold", flag.Value.ToString(CultureInfo.InvariantCulture)]);
+
+        var (exitCode, stdout, _) = InvokeAnalyze([.. args]);
+
+        ReportThreshold(stdout).Should().Be(expected);
+        exitCode.Should().Be(expected < HalfCoveredMethodCrap ? 1 : 0);
+    }
+
+    [Fact]
+    public void Analyze_InvalidConfigFile_Exit2()
+    {
+        var config = CreateFile(ConfigFile.FileName, """{ "crap": { "treshold": 15 } }""");
+        var (source, coverage) = CreateHalfCoveredMethod();
+
+        var (exitCode, _, stderr) = InvokeAnalyze(source, "--coverage", coverage);
+
+        exitCode.Should().Be(2);
+        var error = JsonDocument.Parse(stderr).RootElement.GetProperty("error");
+        error.GetProperty("code").GetString().Should().Be("INVALID_CONFIGURATION");
+        error.GetProperty("file").GetString().Should().Be(config);
     }
 
     [Fact]
@@ -472,6 +617,21 @@ public sealed class IntegrationTests : IDisposable
         exitCode.Should().Be(1);
         var doc = JsonDocument.Parse(stdout);
         doc.RootElement.GetProperty("summary").GetProperty("newCrappy").GetInt32().Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("""{ "methods": [] }""", "THRESHOLD_MISSING")]
+    [InlineData("""{ "threshold": 15, "methods": [] }""", "THRESHOLD_MISMATCH")]
+    public void Diff_Error_ThresholdMissingOrDifferent(string afterJson, string expectedCode)
+    {
+        var beforePath = CreateFile("before.json", """{ "threshold": 30, "methods": [] }""");
+        var afterPath = CreateFile("after.json", afterJson);
+
+        var (exitCode, _, stderr) = InvokeDiff(beforePath, afterPath);
+
+        exitCode.Should().Be(2);
+        JsonDocument.Parse(stderr).RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(expectedCode);
     }
 
     [Fact]

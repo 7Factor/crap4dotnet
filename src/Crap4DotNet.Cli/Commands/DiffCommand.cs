@@ -57,7 +57,18 @@ internal static class DiffCommand
             return;
         }
 
-        var result = DiffEngine.Compare(beforeDoc, afterDoc);
+        DiffResult result;
+        try
+        {
+            result = DiffEngine.Compare(beforeDoc, afterDoc);
+        }
+        catch (InvalidDiffInputException ex)
+        {
+            ErrorOutput.WriteError(ex.Code, ex.Message);
+            Environment.ExitCode = 2;
+            return;
+        }
+
         var json = DiffReportWriter.Write(result);
 
         if (outputPath is not null)
@@ -69,7 +80,6 @@ internal static class DiffCommand
             Console.WriteLine(json);
         }
 
-        // Exit 1 if there are new CRAPpy methods, 0 otherwise
         Environment.ExitCode = result.Summary.NewCrappy > 0 ? 1 : 0;
     }
 }

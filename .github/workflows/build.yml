@@ -1,0 +1,44 @@
+name: Build
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # MinVer reads the version from tags
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-dotnet
+
+      - name: Restore
+        run: dotnet restore --locked-mode
+
+      - name: Build
+        run: dotnet build crap4dotnet.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test crap4dotnet.sln -c Release --no-build --collect:"XPlat Code Coverage" --logger trx --results-directory TestResults
+
+      - name: Pack
+        run: dotnet pack src/Crap4DotNet.Cli -c Release --no-build -o nupkg
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nupkg
+          path: nupkg/*.nupkg
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: test-results
+          path: TestResults
