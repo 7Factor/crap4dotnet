@@ -38,6 +38,9 @@ public static class MethodCoverageMatcher
         var sourceCountByRelaxedKey = complexityResults
             .GroupBy(c => RelaxKey(RoslynMethodParser.ToCanonicalKey(c.Identity)), StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        var sourcesByNameKey = complexityResults
+            .GroupBy(c => MethodKeyHelper.GetNameOnlyKey(RoslynMethodParser.ToCanonicalKey(c.Identity)), StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
 
         foreach (var complexity in complexityResults)
         {
@@ -72,13 +75,14 @@ public static class MethodCoverageMatcher
 
             // Pass 2: Fallback to name-only key (without signature)
             var nameKey = MethodKeyHelper.GetNameOnlyKey(fullKey);
-            if (nameKeyLookup.TryGetValue(nameKey, out var nameMatches) && nameMatches.Count == 1)
+            if (nameKeyLookup.TryGetValue(nameKey, out var nameMatches)
+                && TryResolveByName(nameMatches, complexity, sourcesByNameKey[nameKey], out var nameCoverage))
             {
                 matchedNameKeys.Add(nameKey);
                 methods.Add(new MatchedMethod
                 {
                     Complexity = complexity,
-                    Coverage = nameMatches[0].Coverage
+                    Coverage = nameCoverage
                 });
                 continue;
             }
@@ -169,6 +173,47 @@ public static class MethodCoverageMatcher
             ? MethodKeyHelper.StripMethodGenericArity(canonicalKey)
             : MethodKeyHelper.StripMethodGenericArity(canonicalKey[..sigStart])
               + MethodKeyHelper.StripNullableReferenceAnnotations(canonicalKey[sigStart..]);
+    }
+
+    // Async and iterator entries have no signature, so overloads share a name key.
+    // Their state machines keep the source line numbers, so overloads pair up by line order.
+    private static bool TryResolveByName(
+        List<CoberturaMethodCoverage> entries,
+        MethodComplexityResult complexity,
+        List<MethodComplexityResult> sources,
+        out double coverage)
+    {
+        coverage = 0.0;
+
+        if (entries.Count == 1 && sources.Count == 1)
+        {
+            coverage = entries[0].Coverage;
+            return true;
+        }
+
+        if (entries.Count != sources.Count
+            || entries.Exists(e => e.StartLine is null || !SameFile(complexity.Identity.FilePath, e.FileName))
+            || sources.Exists(s => s.Identity.LineNumber is null))
+            return false;
+
+        var index = sources
+            .OrderBy(s => s.Identity.LineNumber)
+            .ToList()
+            .FindIndex(s => s.Identity == complexity.Identity);
+        coverage = entries.OrderBy(e => e.StartLine).ElementAt(index).Coverage;
+        return true;
+    }
+
+    // Cobertura file names are relative to the project; Roslyn paths are absolute.
+    private static bool SameFile(string? sourcePath, string? coverageFile)
+    {
+        if (string.IsNullOrEmpty(sourcePath) || string.IsNullOrEmpty(coverageFile))
+            return false;
+
+        var source = sourcePath.Replace('\\', '/');
+        var report = coverageFile.Replace('\\', '/');
+        return source.EndsWith(report, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Path.GetFileName(source), Path.GetFileName(report), StringComparison.OrdinalIgnoreCase);
     }
 
     private static void AddToLookup(

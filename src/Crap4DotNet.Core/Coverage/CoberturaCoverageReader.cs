@@ -48,6 +48,7 @@ public static class CoberturaCoverageReader
                     MethodName = methodName,
                     Signature = signature,
                     FileName = filename,
+                    StartLine = FirstLineNumber(method) ?? FirstLineNumber(cls),
                     Coverage = coverage
                 });
             }
@@ -77,6 +78,22 @@ public static class CoberturaCoverageReader
             return lineRateAttr is not null ? ParseDouble(lineRateAttr.Value) : 0.0;
 
         return ParseDouble(branchRateAttr.Value);
+    }
+
+    private static int? FirstLineNumber(XElement element)
+    {
+        int? lowest = null;
+        foreach (var line in element.Descendants("line"))
+        {
+            var attr = line.Attribute("number");
+            if (attr is null)
+                continue;
+            if (int.TryParse(attr.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)
+                && (lowest is null || number < lowest))
+                lowest = number;
+        }
+
+        return lowest;
     }
 
     private static double ParseDouble(string value) =>

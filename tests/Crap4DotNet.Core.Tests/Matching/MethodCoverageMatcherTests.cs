@@ -14,7 +14,9 @@ public sealed class MethodCoverageMatcherTests
         string className = "Service",
         string ns = "MyApp",
         string signature = "()",
-        int complexity = 5) =>
+        int complexity = 5,
+        string filePath = "Test.cs",
+        int lineNumber = 1) =>
         new()
         {
             Identity = new MethodIdentity
@@ -24,8 +26,8 @@ public sealed class MethodCoverageMatcherTests
                 MethodName = methodName,
                 Signature = signature,
                 FullName = $"{ns}.{className}.{methodName}{signature}",
-                FilePath = "Test.cs",
-                LineNumber = 1
+                FilePath = filePath,
+                LineNumber = lineNumber
             },
             Complexity = complexity
         };
@@ -34,12 +36,16 @@ public sealed class MethodCoverageMatcherTests
         string methodName,
         string className = "MyApp.Service",
         string signature = "()",
-        double coverage = 0.8) =>
+        double coverage = 0.8,
+        string? fileName = null,
+        int? startLine = null) =>
         new()
         {
             ClassName = className,
             MethodName = methodName,
             Signature = signature,
+            FileName = fileName,
+            StartLine = startLine,
             Coverage = coverage
         };
 
@@ -409,5 +415,101 @@ public sealed class MethodCoverageMatcherTests
             .Should().Equal("C", "A", "B");
         result.Methods.Select(m => m.Coverage)
             .Should().Equal(0.3, 0.1, 0.2);
+    }
+
+    [Fact]
+    public void AsyncMethod_CoverageOnCompilerGeneratedStateMachine_IsAttributedToSourceMethod()
+    {
+        var complexity = new[] { MakeComplexity("UpdateAsync", signature: "(int)") };
+        var coverage = new[]
+        {
+            MakeCoverage(
+                "MoveNext",
+                className: "MyApp.Service/<UpdateAsync>d__5",
+                coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void GenericAsyncMethod_StateMachineArity_IsAttributedToSourceMethod()
+    {
+        var complexity = new[] { MakeComplexity("Get<TStatus>", signature: "(int)") };
+        var coverage = new[]
+        {
+            MakeCoverage(
+                "MoveNext",
+                className: "MyApp.Service/<Get>d__9`1",
+                coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void TwoAsyncOverloads_AreNotMergedIntoASingleCoverageValue()
+    {
+        // No line numbers, so the two state machines cannot be told apart.
+        var complexity = new[]
+        {
+            MakeComplexity("Create", signature: "(Expense)"),
+            MakeComplexity("Create", signature: "(ExpenseDetails)")
+        };
+        var coverage = new[]
+        {
+            MakeCoverage("MoveNext", className: "MyApp.Service/<Create>d__5", coverage: 0.0),
+            MakeCoverage("MoveNext", className: "MyApp.Service/<Create>d__6", coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Should().OnlyContain(m => m.Coverage == 0.0);
+    }
+
+    [Fact]
+    public void TwoAsyncOverloads_AreDistinguishedBySourcePosition()
+    {
+        var complexity = new[]
+        {
+            MakeComplexity("Create", signature: "(Expense)",
+                filePath: "ExpenseCreator.cs", lineNumber: 26),
+            MakeComplexity("Create", signature: "(ExpenseDetails)",
+                filePath: "ExpenseCreator.cs", lineNumber: 63)
+        };
+        var coverage = new[]
+        {
+            MakeCoverage("MoveNext", className: "MyApp.Service/<Create>d__5",
+                coverage: 0.83, fileName: "ExpenseCreator.cs", startLine: 27),
+            MakeCoverage("MoveNext", className: "MyApp.Service/<Create>d__6",
+                coverage: 1.0, fileName: "ExpenseCreator.cs", startLine: 64)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single(m => m.Complexity.Identity.Signature == "(Expense)")
+            .Coverage.Should().Be(0.83);
+        result.Methods.Single(m => m.Complexity.Identity.Signature == "(ExpenseDetails)")
+            .Coverage.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void NameOnlyMatch_SharedBySeveralSourceMethods_Refuses()
+    {
+        var complexity = new[]
+        {
+            MakeComplexity("Foo", signature: "(int)"),
+            MakeComplexity("Foo", signature: "(string)")
+        };
+        var coverage = new[] { MakeCoverage("Foo", signature: "(System.Int32)", coverage: 0.6) };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods[0].Coverage.Should().Be(0.6);
+        result.Methods[1].Coverage.Should().Be(0.0);
     }
 }

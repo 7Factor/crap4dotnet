@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Crap4DotNet.Core.Coverage;
 
 namespace Crap4DotNet.Core.Matching;
@@ -7,7 +8,7 @@ namespace Crap4DotNet.Core.Matching;
 /// Converts CLR type names to C# keywords, backtick generics to angle brackets,
 /// nested type separators, and accessor/operator naming conventions.
 /// </summary>
-public static class CoberturaMethodParser
+public static partial class CoberturaMethodParser
 {
     private static readonly Dictionary<string, string> ClrToCSharpTypes = new(StringComparer.Ordinal)
     {
@@ -64,12 +65,43 @@ public static class CoberturaMethodParser
     /// </summary>
     public static string ToCanonicalKey(CoberturaMethodCoverage coverage)
     {
+        if (TryGetStateMachineOwnerKey(coverage.ClassName, coverage.MethodName, out var ownerKey))
+            return ownerKey;
+
         var className = NormalizeClassName(coverage.ClassName);
         var methodName = NormalizeMethodName(coverage.MethodName, className);
         var signature = NormalizeSignature(coverage.Signature);
         return $"{className}.{methodName}"
                + MethodKeyHelper.NormalizeSignatureForMatching(signature);
     }
+
+    // The compiler moves async and iterator bodies into Outer/<Method>d__N.MoveNext,
+    // which is where Coverlet reports them. That type has no parameter list, so the key
+    // has no signature and matches only in the name-only pass.
+    private static bool TryGetStateMachineOwnerKey(string className, string methodName, out string key)
+    {
+        key = string.Empty;
+
+        if (!string.Equals(methodName, "MoveNext", StringComparison.Ordinal))
+            return false;
+
+        var match = StateMachineClassRegex().Match(className);
+        if (!match.Success)
+            return false;
+
+        var owner = NormalizeClassName(match.Groups["owner"].Value);
+        var method = match.Groups["method"].Value;
+
+        var arity = match.Groups["arity"].Value;
+        if (arity.Length > 0)
+            method += MethodKeyHelper.NormalizeBacktickGenerics(arity);
+
+        key = $"{owner}.{method}";
+        return true;
+    }
+
+    [GeneratedRegex(@"^(?<owner>.+)/<(?<method>[^>]+)>d__\d+(?<arity>`\d+)?$")]
+    private static partial Regex StateMachineClassRegex();
 
     private static string NormalizeClassName(string className)
     {

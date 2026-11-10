@@ -11,5 +11,6 @@ public sealed record CoberturaMethodCoverage
     public required string MethodName { get; init; }
     public required string Signature { get; init; }
     public string? FileName { get; init; }
+    public int? StartLine { get; init; }
     public required double Coverage { get; init; }
 }

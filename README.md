@@ -38,8 +38,12 @@ Requires .NET 8.0 or later.
 
 ## Quick Start
 
+Coverage is measured by [Coverlet](https://github.com/coverlet-coverage/coverlet), so every
+test project needs a `coverlet.collector` package reference. crap4dotnet reads the Cobertura
+XML Coverlet produces and pairs it with the complexity it calculates from your source.
+
 ```bash
-# Option A: Let crap4dotnet run tests and generate coverage automatically
+# Option A: let crap4dotnet run `dotnet test` for you and pick up the coverage
 dotnet-crap analyze ./MyApp.sln --run-tests
 
 # Option B: Generate coverage yourself, then analyze
@@ -65,7 +69,7 @@ dotnet-crap analyze <path> [options]
 |-----------------|-------------|
 | `<path>` | Path to `.cs` file, directory, `.csproj`, or `.sln` |
 | `--coverage <path>` | Path(s) to Cobertura XML coverage file(s) |
-| `--run-tests` | Run `dotnet test` to generate coverage automatically |
+| `--run-tests` | Run `dotnet test --collect:"XPlat Code Coverage"` and use the coverage it produces |
 | `--threshold <n>` | CRAP threshold (default: 30) |
 | `--output <path>` | Write JSON to file instead of stdout |
 | `--min-crap <n>` | Only include methods with CRAP >= this value |
