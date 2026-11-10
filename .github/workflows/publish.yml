@@ -17,6 +17,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: nuget
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -30,7 +33,13 @@ jobs:
           name: nupkg
           path: nupkg
 
+      - name: Get a temporary NuGet API key
+        id: nuget-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Push to NuGet
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: dotnet nuget push nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"
