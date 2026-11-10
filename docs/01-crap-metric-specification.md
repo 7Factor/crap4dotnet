@@ -840,6 +840,11 @@ Methods are matched by `fullName` across the two reports. Classifications are ev
 > **Design note:** Unchanged methods are omitted from the `methods` section to keep
 > diff output compact. The `summary.unchanged` count tracks how many were omitted.
 
+**Exit code.** `summary.newOrWorseCrappy` counts the methods over the threshold in the "after"
+report that are `added`, `new_crappy`, or `regressed`. The diff exits `1` when that count is above
+zero, else `0`. Methods are matched by `fullName`, so a renamed method over the threshold counts as
+`added`.
+
 #### 10.2.3 Diff Test Scenarios
 
 | Scenario | Before | After | Expected | Priority rule |

@@ -64,8 +64,10 @@ CLI (System.CommandLine)              Core Library
 
 ## CI
 
-- `build.yml` is a reusable workflow (Release build, tests with coverage, pack). `ci.yml` and `publish.yml` both call it, so a release ships the build CI tested.
-- On a PR, `ci.yml` analyzes the PR and its base with the PR's packed tool and runs `dotnet-crap diff`. The job fails when the PR adds a method over the CRAP threshold.
+- `build.yml` is a reusable workflow (locked restore, Release build, tests with coverage, pack). `ci.yml` and `publish.yml` both call it, so a release ships the build CI tested.
+- On a PR, `ci.yml` builds and analyzes the PR and its base with the PR's packed tool, then runs `dotnet-crap diff`. The job fails when a method over the CRAP threshold is added (renames count), crosses the threshold, or gets worse.
+- `global.json` is the only place the SDK version is set. Every job installs it through `.github/actions/setup-dotnet`.
+- Build and test commands live in `.github/scripts/build-and-test.sh`, which the PR and its base share. Change them there.
 - Actions are pinned to commit SHAs. Update the SHA and the version comment together.
 
 ## Key Conventions

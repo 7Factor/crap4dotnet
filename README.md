@@ -107,6 +107,8 @@ dotnet-crap diff <before> <after> [options]
 dotnet-crap diff baseline.json current.json
 ```
 
+`diff` exits 1 when the "after" report has a method over the threshold that is added, crossed the threshold, or got worse. A renamed method counts as added. Use it as a CI gate that the existing CRAPpy methods do not trip.
+
 ## Exit Codes
 
 | Code | Meaning |

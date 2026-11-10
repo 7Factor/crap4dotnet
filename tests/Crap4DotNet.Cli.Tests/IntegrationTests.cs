@@ -474,6 +474,31 @@ public sealed class IntegrationTests : IDisposable
         doc.RootElement.GetProperty("summary").GetProperty("newCrappy").GetInt32().Should().Be(1);
     }
 
+    [Theory]
+    [InlineData("MyApp.Service.M()", 35.0, "MyApp.Service.M()", 200.0, 1)]   // over the threshold, worse
+    [InlineData("MyApp.Service.M()", 5.0, "MyApp.Service.New()", 60.0, 1)]    // added over the threshold
+    [InlineData("MyApp.Service.M()", 5.0, "MyApp.Service.M()", 15.0, 0)]      // worse, under the threshold
+    public void Diff_ExitCode_GatesNewOrWorseCrappyMethods(
+        string beforeName, double beforeCrap, string afterName, double afterCrap, int expectedExitCode)
+    {
+        static object Report(string name, double crap) => new
+        {
+            schemaVersion = "1.0",
+            project = "TestProject",
+            timestamp = "2026-03-01T00:00:00Z",
+            threshold = 30,
+            stats = new { methodCount = 1, crappyMethodCount = crap > 30 ? 1 : 0, totalCrapLoad = 0.0 },
+            methods = new[] { new { fullName = name, crap, complexity = 8, coverage = 0.5 } }
+        };
+
+        var beforePath = CreateFile("before.json", JsonSerializer.Serialize(Report(beforeName, beforeCrap)));
+        var afterPath = CreateFile("after.json", JsonSerializer.Serialize(Report(afterName, afterCrap)));
+
+        var (exitCode, _, _) = InvokeDiff(beforePath, afterPath);
+
+        exitCode.Should().Be(expectedExitCode);
+    }
+
     [Fact]
     public void Diff_OutputToFile()
     {

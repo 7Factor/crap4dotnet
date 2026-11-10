@@ -85,6 +85,9 @@ public static class DiffEngine
                 TotalCrapLoadBefore = beforeStats.crapLoad,
                 TotalCrapLoadAfter = afterStats.crapLoad,
                 NewCrappy = newCrappy.Count,
+                NewOrWorseCrappy = newCrappy.Count
+                    + added.Count(m => m.IsCrappy == true)
+                    + regressed.Count(m => m.CrapAfter > threshold),
                 FixedCrappy = fixedCrappy.Count,
                 Added = added.Count,
                 Removed = removed.Count,
@@ -221,6 +224,12 @@ public sealed record DiffSummary
     public double TotalCrapLoadBefore { get; init; }
     public double TotalCrapLoadAfter { get; init; }
     public int NewCrappy { get; init; }
+
+    /// <summary>
+    /// Methods over the threshold in the "after" report that are new, crossed the threshold,
+    /// or got worse. A renamed method counts as new.
+    /// </summary>
+    public int NewOrWorseCrappy { get; init; }
     public int FixedCrappy { get; init; }
     public int Added { get; init; }
     public int Removed { get; init; }

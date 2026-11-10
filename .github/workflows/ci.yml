@@ -10,7 +10,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # A new push to a PR cancels its older run. Each main commit gets its own group, because
+  # GitHub keeps only one pending run per group and drops the rest.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -20,17 +22,15 @@ jobs:
   crap:
     needs: build
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0 # the base commit is checked out below
+          persist-credentials: false
 
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
-        with:
-          global-json-file: global.json
-          cache: true
-          cache-dependency-path: '**/packages.lock.json'
+      - uses: ./.github/actions/setup-dotnet
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -50,35 +50,22 @@ jobs:
       - name: Analyze
         run: .github/scripts/crap-analyze.sh . TestResults crap-report.json
 
-      # The base is analyzed with this PR's tool, so the diff shows only code changes,
-      # not changes in how the tool scores. Coverlet measures branches in the IL, so the
-      # base must be built like the PR: same SDK, an explicit Release build, then test.
-      # `dotnet test -c Release` without a prior build produced Debug assemblies here.
+      # The base is analyzed with this PR's tool and SDK, so the diff shows only code changes,
+      # not changes in how the tool scores or the compiler emits IL.
       - name: Analyze base
         if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           base="$RUNNER_TEMP/base"
-          git worktree add "$base" "${{ github.event.pull_request.base.sha }}"
+          git worktree add "$base" "$BASE_SHA"
           cp global.json "$base/"
-          dotnet build "$base/crap4dotnet.sln" -c Release
-          dotnet test "$base/crap4dotnet.sln" -c Release --no-build \
-            --collect:"XPlat Code Coverage" --results-directory "$RUNNER_TEMP/base-results"
+          .github/scripts/build-and-test.sh "$base" "$RUNNER_TEMP/base-results"
           .github/scripts/crap-analyze.sh "$base" "$RUNNER_TEMP/base-results" crap-base.json
 
-      - name: Fail on new CRAPpy methods
+      - name: Fail on new or worse CRAPpy methods
         if: github.event_name == 'pull_request'
-        run: |
-          set +e
-          dotnet-crap diff crap-base.json crap-report.json --output crap-diff.json
-          code=$?
-          set -e
-          {
-            echo '### CRAP diff against base'
-            echo '```json'
-            jq '.summary' crap-diff.json
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit "$code"
+        run: .github/scripts/crap-diff.sh crap-base.json crap-report.json crap-diff.json
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()

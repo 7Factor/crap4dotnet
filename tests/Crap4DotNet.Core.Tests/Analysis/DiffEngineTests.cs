@@ -212,4 +212,42 @@ public sealed class DiffEngineTests
         result.Summary.Regressed.Should().Be(1);
         result.Summary.Added.Should().Be(1);
     }
+
+    // === Gate: methods over the threshold that are new or worse ===
+
+    [Theory]
+    [InlineData(25.0, 45.0, 1)]   // crossed the threshold
+    [InlineData(35.0, 200.0, 1)]  // already over the threshold, worse
+    [InlineData(5.0, 15.0, 0)]    // worse, still under the threshold
+    [InlineData(80.0, 50.0, 0)]   // over the threshold, better
+    public void NewOrWorseCrappy_CountsChangedMethods(double before, double after, int expected)
+    {
+        var result = DiffEngine.Compare(
+            MakeReport(("A.M()", before, 5, 0.5)),
+            MakeReport(("A.M()", after, 5, 0.5)),
+            30);
+
+        result.Summary.NewOrWorseCrappy.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(60.0, 1)]
+    [InlineData(5.0, 0)]
+    public void NewOrWorseCrappy_CountsAddedMethodsOverTheThreshold(double crap, int expected)
+    {
+        var result = DiffEngine.Compare(MakeReport(), MakeReport(("A.New()", crap, 8, 0.0)), 30);
+
+        result.Summary.NewOrWorseCrappy.Should().Be(expected);
+    }
+
+    [Fact]
+    public void NewOrWorseCrappy_CountsARenamedMethodOverTheThreshold()
+    {
+        var result = DiffEngine.Compare(
+            MakeReport(("A.Old()", 60.0, 8, 0.0)),
+            MakeReport(("A.Renamed()", 60.0, 8, 0.0)),
+            30);
+
+        result.Summary.NewOrWorseCrappy.Should().Be(1);
+    }
 }

@@ -15,8 +15,6 @@ fi
 
 # Exit code 1 only means some methods are over the threshold. The diff step decides
 # whether that fails the build; exit code 2 is a real error.
-set +e
-dotnet-crap analyze "$checkout/crap4dotnet.sln" --coverage "${coverage[@]}" --output "$output"
-code=$?
-set -e
-[ "$code" -le 1 ] || exit "$code"
+exit_code=0
+dotnet-crap analyze "$checkout/crap4dotnet.sln" --coverage "${coverage[@]}" --output "$output" || exit_code=$?
+[ "$exit_code" -le 1 ] || exit "$exit_code"
