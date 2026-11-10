@@ -80,7 +80,6 @@ internal static class DiffCommand
             Console.WriteLine(json);
         }
 
-        // Exit 1 if there are new CRAPpy methods, 0 otherwise
         Environment.ExitCode = result.Summary.NewCrappy > 0 ? 1 : 0;
     }
 }

@@ -44,7 +44,6 @@ internal static class AnalyzeCommand
         double? minCrap,
         bool runTests)
     {
-        // Validate --run-tests and --coverage are mutually exclusive
         if (runTests && coveragePaths.Length > 0)
         {
             ErrorOutput.WriteError("INVALID_CONFIGURATION",
@@ -53,7 +52,6 @@ internal static class AnalyzeCommand
             return;
         }
 
-        // Validate --run-tests requires a project-level path
         if (runTests && path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
         {
             ErrorOutput.WriteError("INVALID_CONFIGURATION",
@@ -70,7 +68,6 @@ internal static class AnalyzeCommand
             return;
         }
 
-        // Resolve source files
         List<string> sourceFiles;
         string projectName;
         try
@@ -105,14 +102,12 @@ internal static class AnalyzeCommand
             return;
         }
 
-        // Run tests to generate coverage if requested
         List<string> resolvedCoveragePaths;
         if (runTests)
         {
             var testCoveragePaths = RunTests(path);
             if (testCoveragePaths is null)
             {
-                // RunTests already wrote error output
                 Environment.ExitCode = 2;
                 return;
             }
@@ -120,7 +115,6 @@ internal static class AnalyzeCommand
         }
         else
         {
-            // Resolve coverage files
             try
             {
                 resolvedCoveragePaths = ResolveCoveragePaths(coveragePaths, path);
@@ -133,7 +127,6 @@ internal static class AnalyzeCommand
             }
         }
 
-        // Read coverage data
         var coverageEntries = new List<CoberturaMethodCoverage>();
         foreach (var covPath in resolvedCoveragePaths)
         {
@@ -152,7 +145,6 @@ internal static class AnalyzeCommand
             }
         }
 
-        // Run analysis
         AnalysisResult result;
         try
         {
@@ -166,7 +158,6 @@ internal static class AnalyzeCommand
             return;
         }
 
-        // Apply min-crap filter to output (analysis still includes all methods for stats)
         var outputData = result.Data;
         if (minCrap.HasValue)
         {
@@ -176,7 +167,6 @@ internal static class AnalyzeCommand
             outputData = result.Data with { Methods = filtered };
         }
 
-        // Write report
         var json = JsonReportWriter.Write(outputData, result.Warnings);
 
         if (outputPath is not null)
@@ -189,7 +179,6 @@ internal static class AnalyzeCommand
             Console.WriteLine(json);
         }
 
-        // Exit code: 1 if any method is CRAPpy, 0 otherwise
         Environment.ExitCode = result.Data.Stats.CrappyMethodCount > 0 ? 1 : 0;
     }
 
@@ -294,7 +283,6 @@ internal static class AnalyzeCommand
 
     private static List<string> ResolveCoveragePaths(string[] coveragePaths, string sourcePath)
     {
-        // Explicit coverage paths provided
         if (coveragePaths.Length > 0)
         {
             foreach (var p in coveragePaths)
