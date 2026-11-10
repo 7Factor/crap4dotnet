@@ -294,7 +294,6 @@ internal static class AnalyzeCommand
             return coveragePaths.Select(Path.GetFullPath).ToList();
         }
 
-        // Auto-discovery per spec 6.5.2
         var searchDir = Directory.Exists(sourcePath)
             ? sourcePath
             : Path.GetDirectoryName(Path.GetFullPath(sourcePath)) ?? ".";
