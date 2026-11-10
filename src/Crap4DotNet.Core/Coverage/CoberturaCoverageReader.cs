@@ -29,10 +29,12 @@ public static partial class CoberturaCoverageReader
         var root = doc.Root;
         if (root is null) return results;
 
+        var sources = root.Descendants("source").Select(s => s.Value.Trim()).ToList();
+
         foreach (var cls in root.Descendants("class"))
         {
             var className = cls.Attribute("name")?.Value ?? string.Empty;
-            var filename = cls.Attribute("filename")?.Value;
+            var filename = ResolveFileName(cls.Attribute("filename")?.Value, sources);
 
             var methodsElement = cls.Element("methods");
             if (methodsElement is null) continue;
@@ -41,7 +43,7 @@ public static partial class CoberturaCoverageReader
             {
                 var methodName = method.Attribute("name")?.Value ?? string.Empty;
                 var signature = method.Attribute("signature")?.Value ?? string.Empty;
-                var coverage = SelectCoverage(method);
+                var hasBranchRate = method.Attribute("branch-rate") is not null;
 
                 results.Add(new CoberturaMethodCoverage
                 {
@@ -50,13 +52,23 @@ public static partial class CoberturaCoverageReader
                     Signature = signature,
                     FileName = filename,
                     StartLine = FirstLineNumber(method) ?? FirstLineNumber(cls),
-                    Coverage = coverage,
-                    Lines = ReadLines(method)
+                    Coverage = SelectCoverage(method),
+                    Lines = ReadLines(method, countBranches: hasBranchRate)
                 });
             }
         }
 
         return results;
+    }
+
+    // Each report's file names are relative to its own source root, and two test projects
+    // can have different roots for the same file.
+    private static string? ResolveFileName(string? fileName, List<string> sources)
+    {
+        if (fileName is null || sources.Count != 1 || Path.IsPathRooted(fileName))
+            return fileName;
+
+        return sources[0].TrimEnd('/', '\\') + "/" + fileName;
     }
 
     /// <summary>
@@ -68,49 +80,27 @@ public static partial class CoberturaCoverageReader
     /// </summary>
     private static double SelectCoverage(XElement method)
     {
-        var branchRateAttr = method.Attribute("branch-rate");
-        var lineRateAttr = method.Attribute("line-rate");
+        var branchRate = method.Attribute("branch-rate") is { } b ? ParseDouble(b.Value) : (double?)null;
+        var lineRate = method.Attribute("line-rate") is { } l ? ParseDouble(l.Value) : (double?)null;
 
-        if (branchRateAttr is null)
-            return lineRateAttr is not null ? ParseDouble(lineRateAttr.Value) : 0.0;
-
-        var conditionCount = method.Descendants("condition").Count();
-
-        if (conditionCount == 0)
-            return lineRateAttr is not null ? ParseDouble(lineRateAttr.Value) : 0.0;
-
-        return ParseDouble(branchRateAttr.Value);
+        return CoverageRate.Select(method.Descendants("condition").Any(), branchRate, lineRate);
     }
 
-    private static int? FirstLineNumber(XElement element)
-    {
-        int? lowest = null;
-        foreach (var line in element.Descendants("line"))
-        {
-            var attr = line.Attribute("number");
-            if (attr is null)
-                continue;
-            if (int.TryParse(attr.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)
-                && (lowest is null || number < lowest))
-                lowest = number;
-        }
+    private static int? FirstLineNumber(XElement element) =>
+        NumberedLines(element).Select(l => (int?)l.Number).Min();
 
-        return lowest;
-    }
-
-    private static List<CoberturaLine> ReadLines(XElement method)
+    // Branch counts are read only when the method has a branch-rate, so the merged rate
+    // follows the same spec 6.2 rule as SelectCoverage.
+    private static List<CoberturaLine> ReadLines(XElement method, bool countBranches)
     {
         var lines = new List<CoberturaLine>();
-        foreach (var line in method.Descendants("line"))
+        foreach (var (line, number) in NumberedLines(method))
         {
-            if (!int.TryParse(line.Attribute("number")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+            if (!long.TryParse(line.Attribute("hits")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var hits))
                 return [];
 
-            var hit = int.TryParse(line.Attribute("hits")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var hits)
-                && hits > 0;
-
             var (covered, total) = (0, 0);
-            if (line.Descendants("condition").Any())
+            if (countBranches && line.Descendants("condition").Any())
             {
                 var counts = ConditionCountsRegex().Match(line.Attribute("condition-coverage")?.Value ?? "");
                 if (!counts.Success)
@@ -119,10 +109,25 @@ public static partial class CoberturaCoverageReader
                 total = int.Parse(counts.Groups[2].Value, CultureInfo.InvariantCulture);
             }
 
-            lines.Add(new CoberturaLine(number, hit, covered, total));
+            lines.Add(new CoberturaLine
+            {
+                Number = number,
+                Hit = hits > 0,
+                BranchesCovered = covered,
+                BranchesTotal = total
+            });
         }
 
         return lines;
+    }
+
+    private static IEnumerable<(XElement Line, int Number)> NumberedLines(XElement element)
+    {
+        foreach (var line in element.Descendants("line"))
+        {
+            if (int.TryParse(line.Attribute("number")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+                yield return (line, number);
+        }
     }
 
     [GeneratedRegex(@"\((\d+)/(\d+)\)")]

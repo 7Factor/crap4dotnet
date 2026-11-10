@@ -222,6 +222,9 @@ public sealed class CoberturaCoverageReaderTests
         CoberturaCoverageReader.Read(xml).Should().BeEmpty();
     }
 
+    private static CoberturaLine Line(int number, bool hit, int branchesCovered = 0, int branchesTotal = 0) =>
+        new() { Number = number, Hit = hit, BranchesCovered = branchesCovered, BranchesTotal = branchesTotal };
+
     [Fact]
     public void Lines_ReadHitsAndBranchCounts()
     {
@@ -234,9 +237,7 @@ public sealed class CoberturaCoverageReaderTests
             </lines>
         </method>");
 
-        CoberturaCoverageReader.Read(xml).Single().Lines.Should().Equal(
-            new CoberturaLine(10, true, 1, 2),
-            new CoberturaLine(11, false, 0, 0));
+        CoberturaCoverageReader.Read(xml).Single().Lines.Should().Equal(Line(10, true, 1, 2), Line(11, false));
     }
 
     [Fact]
@@ -245,5 +246,81 @@ public sealed class CoberturaCoverageReaderTests
         var xml = WrapInCobertura(MakeMethod(branchRate: "0.5", lineRate: "1.0", conditionCount: 2));
 
         CoberturaCoverageReader.Read(xml).Single().Lines.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Lines_IgnoreBranchCountsWhenBranchRateIsMissing()
+    {
+        var xml = WrapInCobertura(@"<method name=""DoWork"" signature=""()"" line-rate=""1"">
+            <lines>
+                <line number=""10"" hits=""1"" branch=""True"" condition-coverage=""50% (1/2)"">
+                    <conditions><condition number=""0"" type=""jump"" coverage=""50%""/></conditions>
+                </line>
+            </lines>
+        </method>");
+
+        CoberturaCoverageReader.Read(xml).Single().Lines.Should().Equal(Line(10, true));
+    }
+
+    [Fact]
+    public void Lines_AcceptHitCountsAboveIntMaxValue()
+    {
+        var xml = WrapInCobertura(@"<method name=""DoWork"" signature=""()"" line-rate=""1"">
+            <lines><line number=""10"" hits=""3000000000"" branch=""False""/></lines>
+        </method>");
+
+        CoberturaCoverageReader.Read(xml).Single().Lines.Should().Equal(Line(10, true));
+    }
+
+    [Fact]
+    public void Lines_FromRealCoverletOutput_ReproduceTheReportedRate()
+    {
+        // Taken from Coverlet output for this repo; the reported branch-rate is 0.5.
+        var xml = WrapInCobertura(@"<method name=""Scan"" signature=""(System.ReadOnlySpan`1&lt;System.Char&gt;)"" line-rate=""0.41659999999999997"" branch-rate=""0.5"" complexity=""8"">
+              <lines>
+                <line number=""159"" hits=""6"" branch=""False"" />
+                <line number=""161"" hits=""6"" branch=""True"" condition-coverage=""66.66% (4/6)"">
+                  <conditions>
+                    <condition number=""78"" type=""jump"" coverage=""50%"" />
+                    <condition number=""44"" type=""jump"" coverage=""100%"" />
+                    <condition number=""53"" type=""jump"" coverage=""50%"" />
+                  </conditions>
+                </line>
+                <line number=""162"" hits=""6"" branch=""False"" />
+                <line number=""163"" hits=""6"" branch=""False"" />
+                <line number=""164"" hits=""0"" branch=""False"" />
+                <line number=""165"" hits=""0"" branch=""False"" />
+                <line number=""166"" hits=""0"" branch=""True"" condition-coverage=""0% (0/2)"">
+                  <conditions>
+                    <condition number=""25"" type=""jump"" coverage=""0%"" />
+                  </conditions>
+                </line>
+                <line number=""167"" hits=""0"" branch=""False"" />
+                <line number=""168"" hits=""0"" branch=""False"" />
+                <line number=""169"" hits=""0"" branch=""False"" />
+                <line number=""170"" hits=""0"" branch=""False"" />
+                <line number=""171"" hits=""6"" branch=""False"" />
+              </lines>
+            </method>");
+
+        var entry = CoberturaCoverageReader.Read(xml).Single();
+
+        CoverageRate.FromLines(entry.Lines).Should().Be(entry.Coverage);
+    }
+
+    [Fact]
+    public void FileName_IsResolvedAgainstTheSourceRoot()
+    {
+        var xml = @"<?xml version=""1.0""?>
+<coverage>
+  <sources><source>/repo/src/</source></sources>
+  <packages><package name=""MyApp""><classes>
+    <class name=""MyApp.Service"" filename=""Core/Service.cs"">
+      <methods><method name=""DoWork"" signature=""()"" line-rate=""1""><lines/></method></methods>
+    </class>
+  </classes></package></packages>
+</coverage>";
+
+        CoberturaCoverageReader.Read(xml).Single().FileName.Should().Be("/repo/src/Core/Service.cs");
     }
 }

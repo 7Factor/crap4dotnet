@@ -14,8 +14,6 @@ public sealed record CoberturaMethodCoverage
     public int? StartLine { get; init; }
     public required double Coverage { get; init; }
 
-    // Empty when the report gives no usable line data; the merge then falls back to the rate.
+    // Empty when the report has no usable line data.
     public IReadOnlyList<CoberturaLine> Lines { get; init; } = [];
 }
-
-public sealed record CoberturaLine(int Number, bool Hit, int BranchesCovered, int BranchesTotal);

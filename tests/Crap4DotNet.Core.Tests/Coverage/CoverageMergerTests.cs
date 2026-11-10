@@ -9,19 +9,20 @@ public sealed class CoverageMergerTests
     private static CoberturaMethodCoverage Entry(
         double coverage,
         string methodName = "Run",
+        string fileName = "/repo/src/Service.cs",
         params CoberturaLine[] lines) =>
         new()
         {
             ClassName = "MyApp.Service",
             MethodName = methodName,
             Signature = "()",
-            FileName = "Service.cs",
+            FileName = fileName,
             Coverage = coverage,
             Lines = lines
         };
 
     private static CoberturaLine Line(int number, bool hit, int branchesCovered = 0, int branchesTotal = 0) =>
-        new(number, hit, branchesCovered, branchesTotal);
+        new() { Number = number, Hit = hit, BranchesCovered = branchesCovered, BranchesTotal = branchesTotal };
 
     [Fact]
     public void SingleEntry_IsReturnedUnchanged()
@@ -37,6 +38,18 @@ public sealed class CoverageMergerTests
         var merged = CoverageMerger.Merge([Entry(0.5, "Run"), Entry(0.2, "Stop")]);
 
         merged.Select(e => e.Coverage).Should().Equal(0.5, 0.2);
+    }
+
+    [Fact]
+    public void SameMethodNameInDifferentFiles_IsNotMerged()
+    {
+        var merged = CoverageMerger.Merge(
+        [
+            Entry(1.0, fileName: "/repo/App1/Program.cs", lines: [Line(1, true)]),
+            Entry(0.0, fileName: "/repo/App2/Program.cs", lines: [Line(1, false)])
+        ]);
+
+        merged.Select(e => e.Coverage).Should().Equal(1.0, 0.0);
     }
 
     [Fact]
@@ -64,8 +77,7 @@ public sealed class CoverageMergerTests
     [Fact]
     public void BranchingMethod_UsesTheHighestBranchCountPerLine()
     {
-        // The files give branch counts, not which branches ran, so 1/2 and 1/2 can
-        // be the same branch. The merge counts 1 of 2 on that line.
+        // Two reports of 1/2 can be the same branch, so they must not add up to 2/2.
         var merged = CoverageMerger.Merge(
         [
             Entry(0.5, lines: [Line(1, true, 1, 2), Line(2, true, 0, 2)]),
@@ -73,6 +85,18 @@ public sealed class CoverageMergerTests
         ]);
 
         merged.Single().Coverage.Should().Be(0.75);
+    }
+
+    [Fact]
+    public void DifferentBranchTotals_KeepAReportedPair()
+    {
+        var merged = CoverageMerger.Merge(
+        [
+            Entry(1.0, lines: [Line(1, true, 2, 2)]),
+            Entry(0.25, lines: [Line(1, true, 1, 4)])
+        ]);
+
+        merged.Single().Lines.Single().Should().Be(Line(1, true, 1, 4));
     }
 
     [Fact]
