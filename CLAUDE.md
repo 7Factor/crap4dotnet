@@ -64,7 +64,7 @@ CLI (System.CommandLine)              Core Library
 
 ## CI
 
-- `build.yml` is a reusable workflow (locked restore, Release build, tests with coverage, pack). `ci.yml` and `publish.yml` both call it, so a release ships the build CI tested.
+- `build.yml` is a reusable workflow (locked restore, Release build, tests with coverage, pack). `ci.yml` and `publish.yml` both call it, so a release is built and tested the same way as CI.
 - `ci.yml` analyzes the repo with its own packed tool. The `crap` job fails when any method is over the CRAP threshold.
 - `crap4dotnet-config.json` sets this repo's CRAP threshold. Change it there, not with `--threshold` in CI.
 - `global.json` is the only place the SDK version is set. Every job installs it through `.github/actions/setup-dotnet`.

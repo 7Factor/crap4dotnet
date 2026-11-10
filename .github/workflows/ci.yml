@@ -10,8 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  # A new push to a PR cancels its older run. Each main commit gets its own group, because
-  # GitHub keeps only one pending run per group and drops the rest.
+  # One group per main commit: GitHub cancels all but one pending run in a group.
   group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
@@ -41,14 +40,12 @@ jobs:
           name: test-results
           path: TestResults
 
-      # Installing from the packed artifact checks that the package installs, and analyzes
-      # with this build rather than the release on nuget.org.
-      - name: Install dotnet-crap
+      - name: Install dotnet-crap from this run's package
         run: dotnet tool install -g Crap4DotNet --configfile nuget.ci.config --prerelease
 
       - name: Analyze
         run: |
-          # The TRX logger copies each coverage file into an In/ folder; read only the originals.
+          # The TRX logger copies each coverage file into In/. Skip the copies.
           mapfile -t coverage < <(find TestResults -name coverage.cobertura.xml -not -path '*/In/*')
           dotnet-crap analyze crap4dotnet.sln --coverage "${coverage[@]}" --output crap-report.json
 

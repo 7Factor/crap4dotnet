@@ -213,8 +213,6 @@ public sealed class DiffEngineTests
         result.Summary.Added.Should().Be(1);
     }
 
-    // === Threshold ===
-
     private static JsonDocument ReportWithThreshold(string thresholdProperty) =>
         JsonDocument.Parse($$"""{ {{thresholdProperty}} "methods": [] }""");
 

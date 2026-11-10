@@ -243,8 +243,6 @@ public sealed class IntegrationTests : IDisposable
         doc.RootElement.GetProperty("methods").GetArrayLength().Should().BeGreaterOrEqualTo(2);
     }
 
-    // === Source path types ===
-
     private string CreateEmptyCoverage() => CreateFile("coverage.cobertura.xml", """
         <?xml version="1.0" encoding="utf-8"?>
         <coverage line-rate="1.0" version="1.0" timestamp="0"><packages /></coverage>
@@ -298,8 +296,6 @@ public sealed class IntegrationTests : IDisposable
         JsonDocument.Parse(stderr).RootElement.GetProperty("error").GetProperty("code").GetString()
             .Should().Be("SOURCE_NOT_FOUND");
     }
-
-    // === Coverage produced by --run-tests ===
 
     [Fact]
     public void FindCoverageFiles_ReturnsEveryCoverageFile()
@@ -384,9 +380,8 @@ public sealed class IntegrationTests : IDisposable
         exitCode.Should().Be(1);
     }
 
-    // === Threshold from crap4dotnet-config.json ===
+    private const double HalfCoveredMethodCrap = 1.125;
 
-    // comp=1, cov=0.5 → CRAP 1.125
     private (string source, string coverage) CreateHalfCoveredMethod()
     {
         var source = CreateFile("src/Simple.cs",
@@ -422,7 +417,7 @@ public sealed class IntegrationTests : IDisposable
         var (exitCode, stdout, _) = InvokeAnalyze([.. args]);
 
         ReportThreshold(stdout).Should().Be(expected);
-        exitCode.Should().Be(expected < 1.125 ? 1 : 0);
+        exitCode.Should().Be(expected < HalfCoveredMethodCrap ? 1 : 0);
     }
 
     [Fact]

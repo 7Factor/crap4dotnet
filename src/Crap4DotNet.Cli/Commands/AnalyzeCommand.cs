@@ -193,10 +193,6 @@ internal static class AnalyzeCommand
         Environment.ExitCode = result.Data.Stats.CrappyMethodCount > 0 ? 1 : 0;
     }
 
-    /// <summary>
-    /// <c>--threshold</c>, then <c>crap.threshold</c> from the config file, then the default.
-    /// </summary>
-    /// <exception cref="InvalidConfigException">The config file exists but is invalid.</exception>
     private static int ResolveThreshold(int? thresholdFlag, string path)
     {
         var configPath = ConfigFile.Find(path);
@@ -204,8 +200,6 @@ internal static class AnalyzeCommand
         return thresholdFlag ?? config?.Crap?.Threshold ?? CrapOptions.DefaultThreshold;
     }
 
-    // Execute has already rejected .cs paths and ResolveSourceFiles has rejected anything that
-    // is not an existing directory, .csproj or .sln, so the path can go straight to dotnet test.
     private static List<string>? RunTests(string path)
     {
         var target = Path.GetFullPath(path);

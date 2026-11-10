@@ -3,14 +3,11 @@ using System.Text.Json.Serialization;
 
 namespace Crap4DotNet.Core.Configuration;
 
-/// <summary>
-/// Reads <c>crap4dotnet-config.json</c>. Settings are grouped by metric.
-/// </summary>
 public static class ConfigFile
 {
     public const string FileName = "crap4dotnet-config.json";
 
-    // Unknown properties are rejected so that a misspelled setting fails instead of being ignored.
+    // A misspelled setting must fail, not fall back to the default.
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -19,10 +16,6 @@ public static class ConfigFile
         AllowTrailingCommas = true
     };
 
-    /// <summary>
-    /// Returns the path of the nearest config file in the directory of <paramref name="analyzedPath"/>
-    /// or one of its parents, or null if there is none.
-    /// </summary>
     public static string? Find(string analyzedPath)
     {
         var fullPath = Path.GetFullPath(analyzedPath);
@@ -38,7 +31,6 @@ public static class ConfigFile
         return null;
     }
 
-    /// <exception cref="InvalidConfigException">The file is not valid JSON, has an unknown setting, or has an invalid value.</exception>
     public static Crap4DotNetConfig Load(string path)
     {
         Crap4DotNetConfig? config;

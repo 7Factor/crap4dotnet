@@ -10,9 +10,6 @@ public static class DiffEngine
 {
     private const double ChangeTolerance = 0.01;
 
-    /// <exception cref="InvalidDiffInputException">
-    /// A report has no threshold, or the two reports have different thresholds.
-    /// </exception>
     public static DiffResult Compare(JsonDocument before, JsonDocument after)
     {
         var threshold = SharedThreshold(before, after);

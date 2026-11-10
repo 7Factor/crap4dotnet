@@ -1,6 +1,5 @@
 name: Build
 
-# Shared by CI and Publish, so a release ships the same build that CI tested.
 on:
   workflow_call:
 
