@@ -23,8 +23,11 @@ jobs:
       - name: Restore
         run: dotnet restore --locked-mode
 
-      - name: Build and test
-        run: .github/scripts/build-and-test.sh . TestResults
+      - name: Build
+        run: dotnet build crap4dotnet.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test crap4dotnet.sln -c Release --no-build --collect:"XPlat Code Coverage" --logger trx --results-directory TestResults
 
       - name: Pack
         run: dotnet pack src/Crap4DotNet.Cli -c Release --no-build -o nupkg

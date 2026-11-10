@@ -27,7 +27,6 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 0 # the base commit is checked out below
           persist-credentials: false
 
       - uses: ./.github/actions/setup-dotnet
@@ -48,28 +47,14 @@ jobs:
         run: dotnet tool install -g Crap4DotNet --configfile nuget.ci.config --prerelease
 
       - name: Analyze
-        run: .github/scripts/crap-analyze.sh . TestResults crap-report.json
-
-      # The base is analyzed with this PR's tool, SDK and config, so the diff shows only code
-      # changes, not changes in scoring, threshold or compiled IL.
-      - name: Analyze base
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          base="$RUNNER_TEMP/base"
-          git worktree add "$base" "$BASE_SHA"
-          cp global.json crap4dotnet-config.json "$base/"
-          .github/scripts/build-and-test.sh "$base" "$RUNNER_TEMP/base-results"
-          .github/scripts/crap-analyze.sh "$base" "$RUNNER_TEMP/base-results" crap-base.json
-
-      - name: Fail on new or worse CRAPpy methods
-        if: github.event_name == 'pull_request'
-        run: .github/scripts/crap-diff.sh crap-base.json crap-report.json crap-diff.json
+          # The TRX logger copies each coverage file into an In/ folder; read only the originals.
+          mapfile -t coverage < <(find TestResults -name coverage.cobertura.xml -not -path '*/In/*')
+          dotnet-crap analyze crap4dotnet.sln --coverage "${coverage[@]}" --output crap-report.json
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: crap-reports
-          path: crap-*.json
+          name: crap-report
+          path: crap-report.json
           if-no-files-found: ignore

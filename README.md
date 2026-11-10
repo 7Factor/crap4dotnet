@@ -109,8 +109,6 @@ dotnet-crap diff baseline.json current.json
 
 `diff` uses the threshold recorded in the reports. It exits 2 when a report has no threshold or the two reports' thresholds differ.
 
-`diff` exits 1 when the "after" report has a method over the threshold that is added, crossed the threshold, or got worse. A renamed method counts as added. Use it as a CI gate that the existing CRAPpy methods do not trip.
-
 ## Configuration
 
 Settings that belong to a project go in `crap4dotnet-config.json`, committed with the code. Settings are grouped by metric:

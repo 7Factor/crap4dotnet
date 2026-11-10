@@ -243,6 +243,99 @@ public sealed class IntegrationTests : IDisposable
         doc.RootElement.GetProperty("methods").GetArrayLength().Should().BeGreaterOrEqualTo(2);
     }
 
+    // === Source path types ===
+
+    private string CreateEmptyCoverage() => CreateFile("coverage.cobertura.xml", """
+        <?xml version="1.0" encoding="utf-8"?>
+        <coverage line-rate="1.0" version="1.0" timestamp="0"><packages /></coverage>
+        """);
+
+    private static (string project, string[] methods) ReportProjectAndMethods(string stdout)
+    {
+        var root = JsonDocument.Parse(stdout).RootElement;
+        return (root.GetProperty("project").GetString()!,
+            root.GetProperty("methods").EnumerateArray()
+                .Select(m => m.GetProperty("fullName").GetString()!).Order().ToArray());
+    }
+
+    [Fact]
+    public void Analyze_CsprojPath_AnalyzesItsDirectoryExceptBinAndObj()
+    {
+        var project = CreateFile("App/App.csproj", "<Project />");
+        CreateFile("App/Service.cs", "namespace MyApp; public class Service { public void M() {} }");
+        CreateFile("App/obj/Generated.cs", "namespace MyApp; public class Generated { public void G() {} }");
+        CreateFile("App/bin/Copied.cs", "namespace MyApp; public class Copied { public void C() {} }");
+
+        var (_, stdout, _) = InvokeAnalyze(project, "--coverage", CreateEmptyCoverage());
+
+        var (projectName, methods) = ReportProjectAndMethods(stdout);
+        projectName.Should().Be("App");
+        methods.Should().Equal("MyApp.Service.M()");
+    }
+
+    [Fact]
+    public void Analyze_SlnPath_ExcludesTestDirectories()
+    {
+        var solution = CreateFile("App.sln", "");
+        CreateFile("src/Service.cs", "namespace MyApp; public class Service { public void M() {} }");
+        CreateFile("tests/ServiceTests.cs", "namespace MyApp; public class ServiceTests { public void T() {} }");
+
+        var (_, stdout, _) = InvokeAnalyze(solution, "--coverage", CreateEmptyCoverage());
+
+        var (projectName, methods) = ReportProjectAndMethods(stdout);
+        projectName.Should().Be("App");
+        methods.Should().Equal("MyApp.Service.M()");
+    }
+
+    [Fact]
+    public void Analyze_UnsupportedFileType_Exit2()
+    {
+        var path = CreateFile("notes.txt", "");
+
+        var (exitCode, _, stderr) = InvokeAnalyze(path, "--coverage", CreateEmptyCoverage());
+
+        exitCode.Should().Be(2);
+        JsonDocument.Parse(stderr).RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("SOURCE_NOT_FOUND");
+    }
+
+    // === Coverage produced by --run-tests ===
+
+    [Fact]
+    public void FindCoverageFiles_ReturnsEveryCoverageFile()
+    {
+        var first = CreateFile("results/a/coverage.cobertura.xml", "");
+        var second = CreateFile("results/b/coverage.cobertura.xml", "");
+
+        AnalyzeCommand.FindCoverageFiles(Path.Combine(_tempDir, "results"))
+            .Should().BeEquivalentTo([first, second]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FindCoverageFiles_NoCoverage_ReturnsNull(bool resultsDirExists)
+    {
+        var resultsDir = Path.Combine(_tempDir, "results");
+        if (resultsDirExists)
+            Directory.CreateDirectory(resultsDir);
+
+        var stderr = new StringWriter();
+        var originalErr = Console.Error;
+        Console.SetError(stderr);
+        try
+        {
+            AnalyzeCommand.FindCoverageFiles(resultsDir).Should().BeNull();
+        }
+        finally
+        {
+            Console.SetError(originalErr);
+        }
+
+        JsonDocument.Parse(stderr.ToString()).RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("COVERAGE_FILE_NOT_FOUND");
+    }
+
     [Fact]
     public void FullPipeline_OutputToFile()
     {
@@ -529,31 +622,6 @@ public sealed class IntegrationTests : IDisposable
         exitCode.Should().Be(1);
         var doc = JsonDocument.Parse(stdout);
         doc.RootElement.GetProperty("summary").GetProperty("newCrappy").GetInt32().Should().Be(1);
-    }
-
-    [Theory]
-    [InlineData("MyApp.Service.M()", 35.0, "MyApp.Service.M()", 200.0, 1)]   // over the threshold, worse
-    [InlineData("MyApp.Service.M()", 5.0, "MyApp.Service.New()", 60.0, 1)]    // added over the threshold
-    [InlineData("MyApp.Service.M()", 5.0, "MyApp.Service.M()", 15.0, 0)]      // worse, under the threshold
-    public void Diff_ExitCode_GatesNewOrWorseCrappyMethods(
-        string beforeName, double beforeCrap, string afterName, double afterCrap, int expectedExitCode)
-    {
-        static object Report(string name, double crap) => new
-        {
-            schemaVersion = "1.0",
-            project = "TestProject",
-            timestamp = "2026-03-01T00:00:00Z",
-            threshold = 30,
-            stats = new { methodCount = 1, crappyMethodCount = crap > 30 ? 1 : 0, totalCrapLoad = 0.0 },
-            methods = new[] { new { fullName = name, crap, complexity = 8, coverage = 0.5 } }
-        };
-
-        var beforePath = CreateFile("before.json", JsonSerializer.Serialize(Report(beforeName, beforeCrap)));
-        var afterPath = CreateFile("after.json", JsonSerializer.Serialize(Report(afterName, afterCrap)));
-
-        var (exitCode, _, _) = InvokeDiff(beforePath, afterPath);
-
-        exitCode.Should().Be(expectedExitCode);
     }
 
     [Theory]

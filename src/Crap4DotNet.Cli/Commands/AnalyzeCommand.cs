@@ -204,64 +204,46 @@ internal static class AnalyzeCommand
         return thresholdFlag ?? config?.Crap?.Threshold ?? CrapOptions.DefaultThreshold;
     }
 
+    // Execute has already rejected .cs paths and ResolveSourceFiles has rejected anything that
+    // is not an existing directory, .csproj or .sln, so the path can go straight to dotnet test.
     private static List<string>? RunTests(string path)
     {
-        var fullPath = Path.GetFullPath(path);
-
-        // Determine the target for dotnet test
-        string target;
-        if (fullPath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase)
-            || fullPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-        {
-            target = fullPath;
-        }
-        else if (Directory.Exists(fullPath))
-        {
-            target = fullPath;
-        }
-        else
-        {
-            ErrorOutput.WriteError("INVALID_CONFIGURATION",
-                $"--run-tests requires a .csproj, .sln, or directory path: {path}");
-            return null;
-        }
-
+        var target = Path.GetFullPath(path);
         var resultsDir = Path.Combine(
-            Directory.Exists(fullPath) ? fullPath : Path.GetDirectoryName(fullPath) ?? ".",
+            Directory.Exists(target) ? target : Path.GetDirectoryName(target)!,
             "TestResults",
             $"crap-{Guid.NewGuid():N}");
 
-        var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "dotnet",
-                Arguments = $"test \"{target}\" --collect:\"XPlat Code Coverage\" --results-directory \"{resultsDir}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false
-            }
-        };
+        return RunDotnetTest(target, resultsDir) ? FindCoverageFiles(resultsDir) : null;
+    }
 
-        process.Start();
+    private static bool RunDotnetTest(string target, string resultsDir)
+    {
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            Arguments = $"test \"{target}\" --collect:\"XPlat Code Coverage\" --results-directory \"{resultsDir}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        })!;
+
         var stdout = process.StandardOutput.ReadToEnd();
         var stderr = process.StandardError.ReadToEnd();
         process.WaitForExit();
 
-        if (process.ExitCode != 0)
-        {
-            // Forward test output so the user can see what failed
-            if (!string.IsNullOrWhiteSpace(stdout))
-                Console.Error.Write(stdout);
-            if (!string.IsNullOrWhiteSpace(stderr))
-                Console.Error.Write(stderr);
+        if (process.ExitCode == 0)
+            return true;
 
-            ErrorOutput.WriteError("TEST_FAILURE",
-                $"dotnet test exited with code {process.ExitCode}. Fix failing tests and retry.");
-            return null;
-        }
+        Console.Error.Write(stdout);
+        Console.Error.Write(stderr);
+        ErrorOutput.WriteError("TEST_FAILURE",
+            $"dotnet test exited with code {process.ExitCode}. Fix failing tests and retry.");
+        return false;
+    }
 
-        // Find generated coverage files
+    internal static List<string>? FindCoverageFiles(string resultsDir)
+    {
         if (!Directory.Exists(resultsDir))
         {
             ErrorOutput.WriteError("COVERAGE_FILE_NOT_FOUND",
@@ -291,46 +273,29 @@ internal static class AnalyzeCommand
             throw new CrapCliException("SOURCE_NOT_FOUND",
                 $"Source path not found: {path}", path);
 
-        // Single .cs file
-        if (path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(path))
-            return ([Path.GetFullPath(path)], Path.GetFileNameWithoutExtension(path));
+        var fullPath = Path.GetFullPath(path);
+        if (Directory.Exists(fullPath))
+            return (FindSourceFiles(fullPath, excludeTests: false), Path.GetFileName(fullPath));
 
-        // Directory
-        if (Directory.Exists(path))
+        var directory = Path.GetDirectoryName(fullPath)!;
+        var name = Path.GetFileNameWithoutExtension(fullPath);
+        return Path.GetExtension(fullPath).ToUpperInvariant() switch
         {
-            var files = Directory.GetFiles(path, "*.cs", SearchOption.AllDirectories)
-                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                         && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
-                .ToList();
-            return (files, Path.GetFileName(Path.GetFullPath(path)));
-        }
+            ".CS" => ([fullPath], name),
+            ".CSPROJ" => (FindSourceFiles(directory, excludeTests: false), name),
+            ".SLN" => (FindSourceFiles(directory, excludeTests: true), name),
+            _ => throw new CrapCliException("SOURCE_NOT_FOUND", $"Unsupported source path: {path}", path)
+        };
+    }
 
-        // .csproj — find .cs files in its directory
-        if (path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-        {
-            var dir = Path.GetDirectoryName(Path.GetFullPath(path)) ?? ".";
-            var files = Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories)
-                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                         && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
-                .ToList();
-            return (files, Path.GetFileNameWithoutExtension(path));
-        }
-
-        // .sln — find .cs files in solution directory, excluding test projects
-        if (path.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
-        {
-            var dir = Path.GetDirectoryName(Path.GetFullPath(path)) ?? ".";
-            var files = Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories)
-                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                         && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
-                         && !f.Contains($"{Path.DirectorySeparatorChar}test", StringComparison.OrdinalIgnoreCase)
-                         && !f.Contains($"{Path.DirectorySeparatorChar}tests", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            return (files, Path.GetFileNameWithoutExtension(path));
-        }
-
-        throw new CrapCliException("SOURCE_NOT_FOUND",
-            $"Unsupported source path: {path}", path);
+    private static List<string> FindSourceFiles(string directory, bool excludeTests)
+    {
+        var separator = Path.DirectorySeparatorChar;
+        return Directory.GetFiles(directory, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{separator}obj{separator}")
+                     && !f.Contains($"{separator}bin{separator}")
+                     && !(excludeTests && f.Contains($"{separator}test", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
     }
 
     private static List<string> ResolveCoveragePaths(string[] coveragePaths, string sourcePath)
