@@ -16,7 +16,8 @@ internal static class AnalyzeCommand
         {
             AllowMultipleArgumentsPerToken = true
         };
-        var thresholdOpt = new Option<int>("--threshold", () => 30, "CRAP threshold (default: 30)");
+        var thresholdOpt = new Option<int?>("--threshold",
+            $"CRAP threshold. Overrides crap.threshold in {ConfigFile.FileName} (default: {CrapOptions.DefaultThreshold})");
         var outputOpt = new Option<string?>("--output", "Write JSON to file instead of stdout");
         var minCrapOpt = new Option<double?>("--min-crap", "Only include methods with CRAP >= this value");
         var runTestsOpt = new Option<bool>("--run-tests", "Run dotnet test to generate coverage before analysis");
@@ -38,7 +39,7 @@ internal static class AnalyzeCommand
     private static void Execute(
         string path,
         string[] coveragePaths,
-        int threshold,
+        int? thresholdFlag,
         string? outputPath,
         double? minCrap,
         bool runTests)
@@ -61,16 +62,13 @@ internal static class AnalyzeCommand
             return;
         }
 
-        // Validate threshold
-        if (threshold <= 0)
+        if (thresholdFlag <= 0)
         {
             ErrorOutput.WriteError("INVALID_THRESHOLD",
-                $"Threshold must be greater than 0, got: {threshold}");
+                $"Threshold must be greater than 0, got: {thresholdFlag}");
             Environment.ExitCode = 2;
             return;
         }
-
-        var options = new CrapOptions { Threshold = threshold };
 
         // Resolve source files
         List<string> sourceFiles;
@@ -91,6 +89,18 @@ internal static class AnalyzeCommand
             ErrorOutput.WriteError("NO_SOURCE_FILES",
                 "No .cs source files found in the specified path",
                 file: path);
+            Environment.ExitCode = 2;
+            return;
+        }
+
+        CrapOptions options;
+        try
+        {
+            options = new CrapOptions { Threshold = ResolveThreshold(thresholdFlag, path) };
+        }
+        catch (InvalidConfigException ex)
+        {
+            ErrorOutput.WriteError(ex.Code, ex.Message, file: ex.FilePath);
             Environment.ExitCode = 2;
             return;
         }
@@ -181,6 +191,17 @@ internal static class AnalyzeCommand
 
         // Exit code: 1 if any method is CRAPpy, 0 otherwise
         Environment.ExitCode = result.Data.Stats.CrappyMethodCount > 0 ? 1 : 0;
+    }
+
+    /// <summary>
+    /// <c>--threshold</c>, then <c>crap.threshold</c> from the config file, then the default.
+    /// </summary>
+    /// <exception cref="InvalidConfigException">The config file exists but is invalid.</exception>
+    private static int ResolveThreshold(int? thresholdFlag, string path)
+    {
+        var configPath = ConfigFile.Find(path);
+        var config = configPath is null ? null : ConfigFile.Load(configPath);
+        return thresholdFlag ?? config?.Crap?.Threshold ?? CrapOptions.DefaultThreshold;
     }
 
     private static List<string>? RunTests(string path)

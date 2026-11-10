@@ -50,8 +50,8 @@ jobs:
       - name: Analyze
         run: .github/scripts/crap-analyze.sh . TestResults crap-report.json
 
-      # The base is analyzed with this PR's tool and SDK, so the diff shows only code changes,
-      # not changes in how the tool scores or the compiler emits IL.
+      # The base is analyzed with this PR's tool, SDK and config, so the diff shows only code
+      # changes, not changes in scoring, threshold or compiled IL.
       - name: Analyze base
         if: github.event_name == 'pull_request'
         env:
@@ -59,7 +59,7 @@ jobs:
         run: |
           base="$RUNNER_TEMP/base"
           git worktree add "$base" "$BASE_SHA"
-          cp global.json "$base/"
+          cp global.json crap4dotnet-config.json "$base/"
           .github/scripts/build-and-test.sh "$base" "$RUNNER_TEMP/base-results"
           .github/scripts/crap-analyze.sh "$base" "$RUNNER_TEMP/base-results" crap-base.json
 

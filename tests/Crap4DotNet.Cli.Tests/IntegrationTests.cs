@@ -1,6 +1,8 @@
 using System.CommandLine;
+using System.Globalization;
 using System.Text.Json;
 using Crap4DotNet.Cli.Commands;
+using Crap4DotNet.Core.Configuration;
 using FluentAssertions;
 using Xunit;
 
@@ -289,6 +291,61 @@ public sealed class IntegrationTests : IDisposable
         exitCode.Should().Be(1);
     }
 
+    // === Threshold from crap4dotnet-config.json ===
+
+    // comp=1, cov=0.5 → CRAP 1.125
+    private (string source, string coverage) CreateHalfCoveredMethod()
+    {
+        var source = CreateFile("src/Simple.cs",
+            "namespace MyApp; public class Simple { public int Add(int a, int b) => a + b; }");
+        var coverage = CreateFile("src/coverage.cobertura.xml", """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage line-rate="0.5" version="1.0" timestamp="0">
+              <packages><package name="MyApp" line-rate="0.5"><classes>
+                <class name="MyApp.Simple" filename="Simple.cs" line-rate="0.5">
+                  <methods><method name="Add" signature="(System.Int32, System.Int32)" line-rate="0.5" /></methods>
+                </class></classes></package></packages>
+            </coverage>
+            """);
+        return (source, coverage);
+    }
+
+    private static int ReportThreshold(string stdout) =>
+        JsonDocument.Parse(stdout).RootElement.GetProperty("threshold").GetInt32();
+
+    [Theory]
+    [InlineData(null, null, CrapOptions.DefaultThreshold)]
+    [InlineData(1, null, 1)]
+    [InlineData(1, 50, 50)]
+    public void Analyze_Threshold_FlagThenConfigFileThenDefault(int? configThreshold, int? flag, int expected)
+    {
+        if (configThreshold is not null)
+            CreateFile(ConfigFile.FileName, $$"""{ "crap": { "threshold": {{configThreshold}} } }""");
+        var (source, coverage) = CreateHalfCoveredMethod();
+        var args = new List<string> { source, "--coverage", coverage };
+        if (flag is not null)
+            args.AddRange(["--threshold", flag.Value.ToString(CultureInfo.InvariantCulture)]);
+
+        var (exitCode, stdout, _) = InvokeAnalyze([.. args]);
+
+        ReportThreshold(stdout).Should().Be(expected);
+        exitCode.Should().Be(expected < 1.125 ? 1 : 0);
+    }
+
+    [Fact]
+    public void Analyze_InvalidConfigFile_Exit2()
+    {
+        var config = CreateFile(ConfigFile.FileName, """{ "crap": { "treshold": 15 } }""");
+        var (source, coverage) = CreateHalfCoveredMethod();
+
+        var (exitCode, _, stderr) = InvokeAnalyze(source, "--coverage", coverage);
+
+        exitCode.Should().Be(2);
+        var error = JsonDocument.Parse(stderr).RootElement.GetProperty("error");
+        error.GetProperty("code").GetString().Should().Be("INVALID_CONFIGURATION");
+        error.GetProperty("file").GetString().Should().Be(config);
+    }
+
     [Fact]
     public void FullPipeline_MinCrapFilter()
     {
@@ -497,6 +554,21 @@ public sealed class IntegrationTests : IDisposable
         var (exitCode, _, _) = InvokeDiff(beforePath, afterPath);
 
         exitCode.Should().Be(expectedExitCode);
+    }
+
+    [Theory]
+    [InlineData("""{ "methods": [] }""", "THRESHOLD_MISSING")]
+    [InlineData("""{ "threshold": 15, "methods": [] }""", "THRESHOLD_MISMATCH")]
+    public void Diff_Error_ThresholdMissingOrDifferent(string afterJson, string expectedCode)
+    {
+        var beforePath = CreateFile("before.json", """{ "threshold": 30, "methods": [] }""");
+        var afterPath = CreateFile("after.json", afterJson);
+
+        var (exitCode, _, stderr) = InvokeDiff(beforePath, afterPath);
+
+        exitCode.Should().Be(2);
+        JsonDocument.Parse(stderr).RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be(expectedCode);
     }
 
     [Fact]

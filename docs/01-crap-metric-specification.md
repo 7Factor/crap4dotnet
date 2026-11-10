@@ -107,7 +107,15 @@ The CRAP threshold MUST be > 0. The tool MUST reject:
 - Threshold < 0 → `INVALID_THRESHOLD` error
 - Threshold is not a number → `INVALID_CONFIGURATION` error
 
-Default threshold is 30. There is no upper limit, but values above 100 are not practically useful.
+The tool MUST take the threshold from the first of these that sets it:
+
+1. `--threshold`
+2. `crap.threshold` in the nearest `crap4dotnet-config.json` in the analyzed path's directory or one of its parents
+3. the default, 30
+
+The config file is optional. Settings in it are grouped by metric. The tool MUST reject a config file that is not valid JSON, has an unknown setting, or has a value of the wrong type (`INVALID_CONFIGURATION`), and a `crap.threshold` <= 0 (`INVALID_THRESHOLD`). Both errors name the file.
+
+There is no upper limit, but values above 100 are not practically useful.
 
 #### 2.4.4 Extremely High Complexity
 
@@ -629,6 +637,8 @@ This ensures AI agents can always parse error information programmatically.
 | `INVALID_THRESHOLD` | 2 | Threshold is <= 0 or not a valid number |
 | `DIFF_SCHEMA_MISMATCH` | 2 | Diff input files have incompatible schema versions |
 | `DIFF_FILE_NOT_FOUND` | 2 | One or both diff input files do not exist |
+| `THRESHOLD_MISSING` | 2 | A diff input report has no `threshold` |
+| `THRESHOLD_MISMATCH` | 2 | The two diff input reports have different thresholds |
 | `IO_ERROR` | 2 | File system error (permissions, disk full, etc.) |
 
 ### 8.3 Warning Output
@@ -677,6 +687,7 @@ Warnings do NOT change the exit code.
 | Threshold = 0 | `--threshold 0` | Exit 2, `INVALID_THRESHOLD` |
 | Threshold = -5 | `--threshold -5` | Exit 2, `INVALID_THRESHOLD` |
 | Diff with missing file | `dotnet crap diff a.json /missing.json` | Exit 2, `DIFF_FILE_NOT_FOUND` |
+| Diff of reports with different thresholds | `threshold` 30 and 15 | Exit 2, `THRESHOLD_MISMATCH` |
 | Valid but stale coverage | Coverage 10 days older than source | Exit 0, warning `COVERAGE_STALE` |
 | Methods without coverage | 3 source methods not in coverage XML | Exit 0/1, warning `UNMATCHED_METHODS` |
 
@@ -844,6 +855,9 @@ Methods are matched by `fullName` across the two reports. Classifications are ev
 report that are `added`, `new_crappy`, or `regressed`. The diff exits `1` when that count is above
 zero, else `0`. Methods are matched by `fullName`, so a renamed method over the threshold counts as
 `added`.
+
+**Threshold.** The diff uses the `threshold` recorded in the two reports. It exits `2` with
+`THRESHOLD_MISSING` when a report has none, and with `THRESHOLD_MISMATCH` when they differ.
 
 #### 10.2.3 Diff Test Scenarios
 

@@ -70,7 +70,7 @@ dotnet-crap analyze <path> [options]
 | `<path>` | Path to `.cs` file, directory, `.csproj`, or `.sln` |
 | `--coverage <path>` | Path(s) to Cobertura XML coverage file(s) |
 | `--run-tests` | Run `dotnet test --collect:"XPlat Code Coverage"` and use the coverage it produces |
-| `--threshold <n>` | CRAP threshold (default: 30) |
+| `--threshold <n>` | CRAP threshold. Overrides the [config file](#configuration). Default: 30 |
 | `--output <path>` | Write JSON to file instead of stdout |
 | `--min-crap <n>` | Only include methods with CRAP >= this value |
 
@@ -107,7 +107,33 @@ dotnet-crap diff <before> <after> [options]
 dotnet-crap diff baseline.json current.json
 ```
 
+`diff` uses the threshold recorded in the reports. It exits 2 when a report has no threshold or the two reports' thresholds differ.
+
 `diff` exits 1 when the "after" report has a method over the threshold that is added, crossed the threshold, or got worse. A renamed method counts as added. Use it as a CI gate that the existing CRAPpy methods do not trip.
+
+## Configuration
+
+Settings that belong to a project go in `crap4dotnet-config.json`, committed with the code. Settings are grouped by metric:
+
+```json
+{
+  "crap": {
+    "threshold": 30
+  }
+}
+```
+
+| Setting | Description |
+|---------|-------------|
+| `crap.threshold` | CRAP threshold. Must be greater than 0. |
+
+`analyze` uses the nearest `crap4dotnet-config.json` in the analyzed path's directory or one of its parents. The file is optional. An unreadable file, an unknown setting, or an invalid value exits 2.
+
+The threshold comes from the first of these that sets it:
+
+1. `--threshold`
+2. `crap.threshold` in `crap4dotnet-config.json`
+3. the default, 30
 
 ## Exit Codes
 

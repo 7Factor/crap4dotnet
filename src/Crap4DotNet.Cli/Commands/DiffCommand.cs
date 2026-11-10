@@ -57,7 +57,18 @@ internal static class DiffCommand
             return;
         }
 
-        var result = DiffEngine.Compare(beforeDoc, afterDoc);
+        DiffResult result;
+        try
+        {
+            result = DiffEngine.Compare(beforeDoc, afterDoc);
+        }
+        catch (InvalidDiffInputException ex)
+        {
+            ErrorOutput.WriteError(ex.Code, ex.Message);
+            Environment.ExitCode = 2;
+            return;
+        }
+
         var json = DiffReportWriter.Write(result);
 
         if (outputPath is not null)

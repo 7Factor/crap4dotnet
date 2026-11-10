@@ -10,8 +10,13 @@ public static class DiffEngine
 {
     private const double ChangeTolerance = 0.01;
 
-    public static DiffResult Compare(JsonDocument before, JsonDocument after, int threshold = 30)
+    /// <exception cref="InvalidDiffInputException">
+    /// A report has no threshold, or the two reports have different thresholds.
+    /// </exception>
+    public static DiffResult Compare(JsonDocument before, JsonDocument after)
     {
+        var threshold = SharedThreshold(before, after);
+
         var beforeMethods = ExtractMethods(before);
         var afterMethods = ExtractMethods(after);
 
@@ -19,9 +24,6 @@ public static class DiffEngine
         var afterProject = after.RootElement.TryGetProperty("project", out var ap) ? ap.GetString() ?? "" : "";
         var beforeTimestamp = before.RootElement.TryGetProperty("timestamp", out var bt) ? bt.GetString() ?? "" : "";
         var afterTimestamp = after.RootElement.TryGetProperty("timestamp", out var at) ? at.GetString() ?? "" : "";
-
-        if (before.RootElement.TryGetProperty("threshold", out var th))
-            threshold = th.GetInt32();
 
         var added = new List<DiffMethod>();
         var removed = new List<DiffMethod>();
@@ -102,6 +104,25 @@ public static class DiffEngine
             Regressed = regressed,
             Improved = improved
         };
+    }
+
+    private static int SharedThreshold(JsonDocument before, JsonDocument after)
+    {
+        var beforeThreshold = ReadThreshold(before, "before");
+        var afterThreshold = ReadThreshold(after, "after");
+        if (beforeThreshold != afterThreshold)
+            throw new InvalidDiffInputException("THRESHOLD_MISMATCH",
+                $"The reports use different thresholds: before {beforeThreshold}, after {afterThreshold}.");
+        return beforeThreshold;
+    }
+
+    private static int ReadThreshold(JsonDocument report, string name)
+    {
+        if (!report.RootElement.TryGetProperty("threshold", out var threshold)
+            || threshold.ValueKind != JsonValueKind.Number)
+            throw new InvalidDiffInputException("THRESHOLD_MISSING",
+                $"The {name} report has no threshold.");
+        return threshold.GetInt32();
     }
 
     private static void Classify(
@@ -252,4 +273,9 @@ public sealed record DiffMethod
     public double? Delta { get; init; }
     public bool? IsCrappy { get; init; }
     public bool? WasCrappy { get; init; }
+}
+
+public sealed class InvalidDiffInputException(string code, string message) : Exception(message)
+{
+    public string Code { get; } = code;
 }

@@ -5,11 +5,14 @@ namespace Crap4DotNet.Core.Configuration;
 /// </summary>
 public sealed record CrapOptions
 {
+    /// <summary>
+    /// Used when neither <c>--threshold</c> nor <c>crap4dotnet-config.json</c> sets a threshold.
+    /// </summary>
     public const int DefaultThreshold = 30;
 
-    private readonly int _threshold = DefaultThreshold;
+    private readonly int _threshold;
 
-    public int Threshold
+    public required int Threshold
     {
         get => _threshold;
         init

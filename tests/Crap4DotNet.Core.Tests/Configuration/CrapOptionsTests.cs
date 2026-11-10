@@ -9,9 +9,7 @@ public sealed class CrapOptionsTests
     [Fact]
     public void DefaultThreshold_Is30()
     {
-        var options = new CrapOptions();
-
-        options.Threshold.Should().Be(30);
+        CrapOptions.DefaultThreshold.Should().Be(30);
     }
 
     [Fact]
