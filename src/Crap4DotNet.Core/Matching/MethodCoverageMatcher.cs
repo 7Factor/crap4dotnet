@@ -11,8 +11,12 @@ public static class MethodCoverageMatcher
 {
     public static MatchResult Match(
         IReadOnlyList<MethodComplexityResult> complexityResults,
-        IReadOnlyList<CoberturaMethodCoverage> coverageEntries)
+        IReadOnlyList<CoberturaMethodCoverage> reportedEntries)
     {
+        // Every pass assumes one entry per method, and each test project's report repeats
+        // the assemblies it loads.
+        var coverageEntries = CoverageMerger.Merge(reportedEntries);
+
         // Build coverage lookups by normalized key
         var fullKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
         var relaxedKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);

@@ -505,9 +505,24 @@ solution and produces a **single merged report**.
    Test projects (those referencing `Microsoft.NET.Test.Sdk` or containing `xunit`/`nunit`/`mstest`
    package references) are excluded from analysis by default.
 2. **Coverage merging**: If multiple `--coverage` files are specified, or if auto-discovery finds
-   multiple coverage files, all coverage data is merged into a single lookup. If the same method
-   appears in multiple coverage files, the **highest coverage value** is used (best-case from
-   any test project).
+   multiple coverage files, all coverage data is merged into a single lookup. The matcher merges
+   before its first pass, because every pass assumes one entry per method.
+   - **Same method:** class, method name, signature, and source file match. File paths compare
+     without case.
+   - **Source file:** each report's `filename` is resolved against its `<source>` root, because
+     each test project can have a different root. Separators become `/` and `.`/`..` segments
+     are resolved. With several roots, the first root that contains the file on disk is used,
+     else the first root.
+
+   Same-method entries merge line by line:
+   - A line is covered when any entry hit it.
+   - Each line keeps one reported branch count (covered/total): the one with the highest
+     covered fraction, then the larger total. Reports give counts, not which branches ran, so
+     counts are never added.
+   - The rate is recomputed from the merged lines with the 6.2 rule. Branch counts are read only
+     for methods that have a `branch-rate`.
+   - If any entry has no usable line data, or no entry has lines, the **highest coverage value**
+     is used.
 3. **Single report**: The output is one JSON report with all methods from all projects. The
    `hierarchy` section groups by namespace (which naturally separates projects since .NET projects
    typically use distinct root namespaces).

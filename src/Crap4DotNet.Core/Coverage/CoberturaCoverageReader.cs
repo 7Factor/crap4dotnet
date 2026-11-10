@@ -28,10 +28,15 @@ public static class CoberturaCoverageReader
         var root = doc.Root;
         if (root is null) return results;
 
+        var sources = root.Descendants("source")
+            .Select(s => s.Value.Trim())
+            .Where(s => s.Length > 0)
+            .ToList();
+
         foreach (var cls in root.Descendants("class"))
         {
             var className = cls.Attribute("name")?.Value ?? string.Empty;
-            var filename = cls.Attribute("filename")?.Value;
+            var filename = CoverageFilePath.Resolve(cls.Attribute("filename")?.Value, sources);
 
             var methodsElement = cls.Element("methods");
             if (methodsElement is null) continue;
@@ -40,7 +45,7 @@ public static class CoberturaCoverageReader
             {
                 var methodName = method.Attribute("name")?.Value ?? string.Empty;
                 var signature = method.Attribute("signature")?.Value ?? string.Empty;
-                var coverage = SelectCoverage(method);
+                var branchRate = method.Attribute("branch-rate") is { } attr ? ParseDouble(attr.Value) : (double?)null;
 
                 results.Add(new CoberturaMethodCoverage
                 {
@@ -48,8 +53,9 @@ public static class CoberturaCoverageReader
                     MethodName = methodName,
                     Signature = signature,
                     FileName = filename,
-                    StartLine = FirstLineNumber(method) ?? FirstLineNumber(cls),
-                    Coverage = coverage
+                    StartLine = CoberturaLineReader.FirstLineNumber(method) ?? CoberturaLineReader.FirstLineNumber(cls),
+                    Coverage = SelectCoverage(method, branchRate),
+                    Lines = CoberturaLineReader.ReadLines(method, countBranches: branchRate is not null)
                 });
             }
         }
@@ -64,36 +70,11 @@ public static class CoberturaCoverageReader
     /// 3. branch-rate PRESENT, condition count > 0 → use branch-rate
     /// 4. Neither present → 0.0
     /// </summary>
-    private static double SelectCoverage(XElement method)
+    private static double SelectCoverage(XElement method, double? branchRate)
     {
-        var branchRateAttr = method.Attribute("branch-rate");
-        var lineRateAttr = method.Attribute("line-rate");
+        var lineRate = method.Attribute("line-rate") is { } attr ? ParseDouble(attr.Value) : (double?)null;
 
-        if (branchRateAttr is null)
-            return lineRateAttr is not null ? ParseDouble(lineRateAttr.Value) : 0.0;
-
-        var conditionCount = method.Descendants("condition").Count();
-
-        if (conditionCount == 0)
-            return lineRateAttr is not null ? ParseDouble(lineRateAttr.Value) : 0.0;
-
-        return ParseDouble(branchRateAttr.Value);
-    }
-
-    private static int? FirstLineNumber(XElement element)
-    {
-        int? lowest = null;
-        foreach (var line in element.Descendants("line"))
-        {
-            var attr = line.Attribute("number");
-            if (attr is null)
-                continue;
-            if (int.TryParse(attr.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)
-                && (lowest is null || number < lowest))
-                lowest = number;
-        }
-
-        return lowest;
+        return CoverageRate.FromRates(method.Descendants("condition").Any(), branchRate, lineRate);
     }
 
     private static double ParseDouble(string value) =>

@@ -13,4 +13,9 @@ public sealed record CoberturaMethodCoverage
     public string? FileName { get; init; }
     public int? StartLine { get; init; }
     public required double Coverage { get; init; }
+
+    /// <summary>
+    /// The method's lines, or null when the report has no usable line data.
+    /// </summary>
+    public IReadOnlyList<CoberturaLine>? Lines { get; init; }
 }

@@ -142,4 +142,16 @@ public sealed class CrapAnalyzerTests
         result.Data.Methods.Should().BeEmpty();
         result.Data.Stats.MethodCount.Should().Be(0);
     }
+
+    [Fact]
+    public void SameMethodInTwoCoverageFiles_IsNotScoredByFileOrder()
+    {
+        var complexity = new[] { MakeComplexity("Run", 5) };
+        var coverage = new[] { MakeCoverage("Run", 0.0), MakeCoverage("Run", 1.0) };
+
+        var result = CrapAnalyzer.AnalyzeFromResults(
+            complexity, coverage, new CrapOptions { Threshold = 30 });
+
+        result.Data.Methods.Single().Coverage.Should().Be(1.0);
+    }
 }
