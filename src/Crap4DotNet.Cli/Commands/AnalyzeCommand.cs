@@ -191,6 +191,17 @@ internal static class AnalyzeCommand
 
     private static List<string>? RunTests(string path)
     {
+        // dotnet test reads the runner from the global.json of its working directory.
+        var testingPlatformConfig = TestRunner.FindTestingPlatformGlobalJson(Directory.GetCurrentDirectory());
+        if (testingPlatformConfig is not null)
+        {
+            ErrorOutput.WriteError("UNSUPPORTED_TEST_RUNNER",
+                "--run-tests collects coverage with the VSTest collector, which Microsoft.Testing.Platform does not support. "
+                + "Generate Cobertura coverage with a Microsoft.Testing.Platform coverage extension and pass it with --coverage.",
+                file: testingPlatformConfig);
+            return null;
+        }
+
         var target = Path.GetFullPath(path);
         var resultsDir = Path.Combine(
             Directory.Exists(target) ? target : Path.GetDirectoryName(target)!,

@@ -2,7 +2,7 @@
 name: crap
 description: Analyze C# code for CRAP (Change Risk Anti-Patterns) metrics using dotnet-crap
 license: MIT
-compatibility: Requires .NET 8.0+ SDK. The dotnet-crap global tool must be installed.
+compatibility: Requires the .NET 8.0 runtime or later. The dotnet-crap global tool must be installed.
 metadata:
   author: 7Factor
   version: "0.1.0"
@@ -12,12 +12,8 @@ You have access to `dotnet-crap`, a .NET global tool that computes CRAP scores f
 
 ## Prerequisites
 
-The tool is not yet published to NuGet. Install from source:
-
 ```bash
-git clone <repo-url> && cd crap4dotnet
-dotnet pack src/Crap4DotNet.Cli -o ./nupkg
-dotnet tool install -g Crap4DotNet --add-source ./nupkg
+dotnet tool install -g Crap4DotNet
 ```
 
 Verify with `dotnet-crap --version`.
@@ -39,11 +35,20 @@ dotnet-crap analyze <path> --coverage <coverage-xml-path>
 ```
 
 - `<path>` can be a `.cs` file, directory, `.csproj`, or `.sln` (`--run-tests` requires `.csproj`, `.sln`, or directory)
-- `--run-tests` runs `dotnet test` with coverage collection automatically (mutually exclusive with `--coverage`)
+- `--run-tests` runs `dotnet test` with coverage collection automatically (mutually exclusive with `--coverage`). It does not work when `global.json` selects Microsoft.Testing.Platform as the test runner; see below.
 - `--coverage` accepts one or more Cobertura XML paths (globs work)
-- `--threshold <n>` sets the CRAP threshold (default: 30)
+- `--threshold <n>` sets the CRAP threshold for one run. A project sets its own in `crap4dotnet-config.json` (`{ "crap": { "threshold": 30 } }`). The default is 30.
 - `--min-crap <n>` filters out low-scoring methods from output
 - `--output <path>` writes JSON to a file instead of stdout
+
+#### Microsoft.Testing.Platform projects
+
+When `global.json` sets `"test": { "runner": "Microsoft.Testing.Platform" }`, `--run-tests` exits 2 with `UNSUPPORTED_TEST_RUNNER`. Generate Cobertura coverage with the `Microsoft.Testing.Extensions.CodeCoverage` package instead, then pass it with `--coverage`:
+
+```bash
+dotnet test --project <test-project> --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+dotnet-crap analyze <path> --coverage <test-project>/bin/Debug/<tfm>/TestResults/coverage.cobertura.xml
+```
 
 ### Step 2: Parse the JSON Output
 

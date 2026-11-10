@@ -646,6 +646,7 @@ This ensures AI agents can always parse error information programmatically.
 | `THRESHOLD_MISSING` | 2 | A diff input report has no `threshold` |
 | `THRESHOLD_MISMATCH` | 2 | The two diff input reports have different thresholds |
 | `IO_ERROR` | 2 | File system error (permissions, disk full, etc.) |
+| `UNSUPPORTED_TEST_RUNNER` | 2 | `--run-tests` was used where `global.json` selects Microsoft.Testing.Platform, which does not support the VSTest coverage collector |
 
 ### 8.3 Warning Output
 

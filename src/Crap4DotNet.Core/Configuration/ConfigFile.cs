@@ -19,16 +19,7 @@ public static class ConfigFile
     public static string? Find(string analyzedPath)
     {
         var fullPath = Path.GetFullPath(analyzedPath);
-        var directory = new DirectoryInfo(Directory.Exists(fullPath) ? fullPath : Path.GetDirectoryName(fullPath)!);
-
-        for (; directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, FileName);
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        return null;
+        return AncestorFile.Find(Directory.Exists(fullPath) ? fullPath : Path.GetDirectoryName(fullPath)!, FileName);
     }
 
     public static Crap4DotNetConfig Load(string path)

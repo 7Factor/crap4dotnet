@@ -55,6 +55,15 @@ dotnet-crap analyze ./src/MyProject \
 # Exit code 0 = clean, 1 = CRAPpy methods found
 ```
 
+### Microsoft.Testing.Platform
+
+`--run-tests` uses the VSTest coverage collector. When `global.json` selects Microsoft.Testing.Platform as the test runner, `--run-tests` exits 2 with `UNSUPPORTED_TEST_RUNNER`. Generate Cobertura coverage with the `Microsoft.Testing.Extensions.CodeCoverage` package, then pass it with `--coverage`:
+
+```bash
+dotnet test --project ./tests/MyApp.Tests --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+dotnet-crap analyze ./src/MyApp --coverage ./tests/MyApp.Tests/bin/Debug/net10.0/TestResults/coverage.cobertura.xml
+```
+
 ## Commands
 
 ### `analyze`
