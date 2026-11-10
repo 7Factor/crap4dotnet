@@ -68,6 +68,7 @@ CLI (System.CommandLine)              Core Library
 - `ci.yml` analyzes the repo with its own packed tool. The `crap` job fails when any method is over the CRAP threshold.
 - `crap4dotnet-config.json` sets this repo's CRAP threshold. Change it there, not with `--threshold` in CI.
 - `global.json` is the only place the SDK version is set. Every job installs it through `.github/actions/setup-dotnet`.
+- `publish.yml` pushes to NuGet with Trusted Publishing: `NuGet/login` exchanges the job's OIDC token for a temporary API key. The nuget.org policy names `publish.yml` and the `nuget` environment, so renaming either breaks publishing.
 - Actions are pinned to commit SHAs. Update the SHA and the version comment together.
 
 ## Key Conventions
