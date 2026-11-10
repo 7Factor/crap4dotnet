@@ -10,14 +10,14 @@ crap4dotnet calculates CRAP (Change Risk Anti-Patterns) metrics for .NET code. I
 
 ```bash
 dotnet build                              # build all projects
-dotnet test                               # run all tests (217 core + 23 CLI)
+dotnet test                               # run all tests
 dotnet test --filter "FullyQualifiedName~SummaryReportWriter"  # run tests matching a name
 dotnet test tests/Crap4DotNet.Core.Tests  # run one test project
 dotnet test tests/Crap4DotNet.Cli.Tests   # run CLI integration tests
 
 # install tool locally for manual testing
 dotnet pack src/Crap4DotNet.Cli -o ./nupkg
-dotnet tool install -g Crap4DotNet --add-source ./nupkg
+dotnet tool install -g Crap4DotNet --configfile nuget.ci.config --prerelease   # --add-source fails under package source mapping
 
 # run the tool
 dotnet-crap analyze ./crap4dotnet.sln --run-tests --output report.json
@@ -60,6 +60,13 @@ CLI (System.CommandLine)              Core Library
 - **Warnings are errors** — all projects via `Directory.Build.props`
 - Analyzer level: `latest-recommended` (CA1305 etc. enforced — use `CultureInfo.InvariantCulture` for all formatting)
 - xUnit + FluentAssertions + NSubstitute for tests
+- SDK pinned in `global.json`. Restore uses `packages.lock.json`, and CI restores with `--locked-mode`, so commit the lock files after changing a package version.
+
+## CI
+
+- `build.yml` is a reusable workflow (Release build, tests with coverage, pack). `ci.yml` and `publish.yml` both call it, so a release ships the build CI tested.
+- On a PR, `ci.yml` analyzes the PR and its base with the PR's packed tool and runs `dotnet-crap diff`. The job fails when the PR adds a method over the CRAP threshold.
+- Actions are pinned to commit SHAs. Update the SHA and the version comment together.
 
 ## Key Conventions
 
