@@ -14,6 +14,8 @@ public sealed record CoberturaMethodCoverage
     public int? StartLine { get; init; }
     public required double Coverage { get; init; }
 
-    // Empty when the report has no usable line data.
-    public IReadOnlyList<CoberturaLine> Lines { get; init; } = [];
+    /// <summary>
+    /// The method's lines, or null when the report has no usable line data.
+    /// </summary>
+    public IReadOnlyList<CoberturaLine>? Lines { get; init; }
 }

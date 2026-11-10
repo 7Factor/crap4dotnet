@@ -245,7 +245,7 @@ public sealed class CoberturaCoverageReaderTests
     {
         var xml = WrapInCobertura(MakeMethod(branchRate: "0.5", lineRate: "1.0", conditionCount: 2));
 
-        CoberturaCoverageReader.Read(xml).Single().Lines.Should().BeEmpty();
+        CoberturaCoverageReader.Read(xml).Single().Lines.Should().BeNull();
     }
 
     [Fact]
@@ -305,7 +305,7 @@ public sealed class CoberturaCoverageReaderTests
 
         var entry = CoberturaCoverageReader.Read(xml).Single();
 
-        CoverageRate.FromLines(entry.Lines).Should().Be(entry.Coverage);
+        CoverageRate.FromLines(entry.Lines!).Should().Be(entry.Coverage);
     }
 
     [Fact]

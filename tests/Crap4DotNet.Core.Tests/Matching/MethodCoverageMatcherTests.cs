@@ -512,4 +512,34 @@ public sealed class MethodCoverageMatcherTests
         result.Methods[0].Coverage.Should().Be(0.6);
         result.Methods[1].Coverage.Should().Be(0.0);
     }
+
+    [Fact]
+    public void SameMethodInTwoCoverageFiles_IsNotScoredByFileOrder()
+    {
+        var complexity = new[] { MakeComplexity("Run") };
+        var coverage = new[]
+        {
+            MakeCoverage("Run", coverage: 0.0),
+            MakeCoverage("Run", coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void AsyncMethodInTwoCoverageFiles_IsStillMatched()
+    {
+        var complexity = new[] { MakeComplexity("Run", signature: "(int)") };
+        var coverage = new[]
+        {
+            MakeCoverage("MoveNext", className: "MyApp.Service/<Run>d__1", coverage: 0.0),
+            MakeCoverage("MoveNext", className: "MyApp.Service/<Run>d__1", coverage: 1.0)
+        };
+
+        var result = MethodCoverageMatcher.Match(complexity, coverage);
+
+        result.Methods.Single().Coverage.Should().Be(1.0);
+    }
 }

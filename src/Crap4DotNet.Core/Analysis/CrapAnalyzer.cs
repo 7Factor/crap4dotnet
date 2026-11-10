@@ -8,7 +8,7 @@ using Crap4DotNet.Core.Models;
 namespace Crap4DotNet.Core.Analysis;
 
 /// <summary>
-/// Top-level orchestrator: source → complexity → coverage → merge duplicates → match → CRAP scores → stats.
+/// Top-level orchestrator: source → complexity → coverage → match → CRAP scores → stats.
 /// Keeps the full pipeline in Core so the CLI is just a thin shell.
 /// </summary>
 public static class CrapAnalyzer
@@ -40,9 +40,8 @@ public static class CrapAnalyzer
         CrapOptions options,
         string projectName = "")
     {
-        // Step 2: Merge duplicate coverage entries, then match complexity to coverage (left outer join)
-        var mergedCoverage = CoverageMerger.Merge(coverageEntries);
-        var matchResult = MethodCoverageMatcher.Match(complexityResults, mergedCoverage);
+        // Step 2: Match complexity to coverage (left outer join)
+        var matchResult = MethodCoverageMatcher.Match(complexityResults, coverageEntries);
 
         // Step 3: Calculate CRAP score for each method
         var methods = new List<MethodCrapData>();

@@ -10,13 +10,15 @@ public sealed class CoverageMergerTests
         double coverage,
         string methodName = "Run",
         string fileName = "/repo/src/Service.cs",
-        params CoberturaLine[] lines) =>
+        int? startLine = null,
+        IReadOnlyList<CoberturaLine>? lines = null) =>
         new()
         {
             ClassName = "MyApp.Service",
             MethodName = methodName,
             Signature = "()",
             FileName = fileName,
+            StartLine = startLine,
             Coverage = coverage,
             Lines = lines
         };
@@ -53,6 +55,18 @@ public sealed class CoverageMergerTests
     }
 
     [Fact]
+    public void FileNamesThatDifferOnlyInCase_AreMerged()
+    {
+        var merged = CoverageMerger.Merge(
+        [
+            Entry(0.0, fileName: "C:/Repo/Service.cs", lines: [Line(1, false)]),
+            Entry(1.0, fileName: "c:/repo/service.cs", lines: [Line(1, true)])
+        ]);
+
+        merged.Single().Coverage.Should().Be(1.0);
+    }
+
+    [Fact]
     public void LinesCoveredInDifferentFiles_AreCombined()
     {
         var merged = CoverageMerger.Merge(
@@ -75,7 +89,7 @@ public sealed class CoverageMergerTests
     }
 
     [Fact]
-    public void BranchingMethod_UsesTheHighestBranchCountPerLine()
+    public void BranchingMethod_DoesNotAddBranchCountsAcrossFiles()
     {
         // Two reports of 1/2 can be the same branch, so they must not add up to 2/2.
         var merged = CoverageMerger.Merge(
@@ -88,22 +102,44 @@ public sealed class CoverageMergerTests
     }
 
     [Fact]
-    public void DifferentBranchTotals_KeepAReportedPair()
+    public void DifferentBranchTotals_KeepTheMostCoveredReportedPair()
     {
         var merged = CoverageMerger.Merge(
         [
-            Entry(1.0, lines: [Line(1, true, 2, 2)]),
-            Entry(0.25, lines: [Line(1, true, 1, 4)])
+            Entry(0.5, lines: [Line(1, true, 1, 2)]),
+            Entry(0.0, lines: [Line(1, true, 0, 4)])
         ]);
 
-        merged.Single().Lines.Single().Should().Be(Line(1, true, 1, 4));
+        merged.Single().Lines.Should().Equal(Line(1, true, 1, 2));
+        merged.Single().Coverage.Should().Be(0.5);
+    }
+
+    [Fact]
+    public void MergedEntry_StartsAtItsFirstMergedLine()
+    {
+        var merged = CoverageMerger.Merge(
+        [
+            Entry(1.0, startLine: 12, lines: [Line(12, true)]),
+            Entry(1.0, startLine: 10, lines: [Line(10, true), Line(12, true)])
+        ]);
+
+        merged.Single().StartLine.Should().Be(10);
     }
 
     [Fact]
     public void EntriesWithoutLineData_TakeTheHighestRate()
     {
-        var merged = CoverageMerger.Merge([Entry(0.0), Entry(0.7)]);
+        var merged = CoverageMerger.Merge([Entry(0.0), Entry(0.7, lines: [Line(1, true)])]);
 
         merged.Single().Coverage.Should().Be(0.7);
+        merged.Single().Lines.Should().BeNull();
+    }
+
+    [Fact]
+    public void EntriesWithNoLines_TakeTheHighestRate()
+    {
+        var merged = CoverageMerger.Merge([Entry(0.0, lines: []), Entry(1.0, lines: [])]);
+
+        merged.Single().Coverage.Should().Be(1.0);
     }
 }
