@@ -472,6 +472,12 @@ analysis produces a CRAP result, whether or not it has a matching coverage entry
 | No | Yes | **Ignore** the orphaned coverage entry. Emit `ORPHANED_COVERAGE` warning |
 | No | No | N/A — method does not exist |
 
+One coverage entry can cover several source methods. Coverlet writes one entry for `Foo(int)`
+and `Foo<T>(int)`, with the lines of both. The tool MUST then give each method the rate of the
+entry's lines inside the method's source line range, using the field selection in 6.2. A method
+with no lines in the entry is unmatched. When the entry has no line data, the tool MUST emit a
+`SHARED_COVERAGE` warning.
+
 #### 6.4.2 Rationale
 
 - **Complexity without coverage** (most common mismatch): The method exists in source but has
@@ -670,6 +676,7 @@ Warnings do NOT change the exit code.
 | `COVERAGE_STALE` | Coverage file is older than source files |
 | `UNMATCHED_METHODS` | Methods in source had no matching coverage entry |
 | `ORPHANED_COVERAGE` | Coverage entries had no matching source method |
+| `SHARED_COVERAGE` | A coverage entry covers several source methods and has no line data to split it |
 | `COVERAGE_CLAMPED` | Coverage values outside 0.0-1.0 were clamped |
 | `EMPTY_NAMESPACE` | A namespace contained no analyzable methods after filtering |
 | `NO_ANALYZABLE_METHODS` | Source files found but all methods were excluded by filtering |
