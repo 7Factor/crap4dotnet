@@ -76,7 +76,7 @@ dotnet-crap analyze <path> [options]
 
 | Argument/Option | Description |
 |-----------------|-------------|
-| `<path>` | Path to `.cs` file, directory, `.csproj`, or `.sln` |
+| `<path>` | Path to `.cs` file, directory, `.csproj`, `.sln`, or `.slnx` |
 | `--coverage <path>` | Path(s) to Cobertura XML coverage file(s) |
 | `--run-tests` | Run `dotnet test --collect:"XPlat Code Coverage"` and use the coverage it produces |
 | `--threshold <n>` | CRAP threshold. Overrides the [config file](#configuration). Default: 30 |

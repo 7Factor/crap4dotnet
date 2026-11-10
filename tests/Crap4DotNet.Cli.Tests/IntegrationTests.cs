@@ -271,10 +271,12 @@ public sealed class IntegrationTests : IDisposable
         methods.Should().Equal("MyApp.Service.M()");
     }
 
-    [Fact]
-    public void Analyze_SlnPath_ExcludesTestDirectories()
+    [Theory]
+    [InlineData("App.sln")]
+    [InlineData("App.slnx")]
+    public void Analyze_SolutionPath_ExcludesTestDirectories(string solutionFile)
     {
-        var solution = CreateFile("App.sln", "");
+        var solution = CreateFile(solutionFile, "");
         CreateFile("src/Service.cs", "namespace MyApp; public class Service { public void M() {} }");
         CreateFile("tests/ServiceTests.cs", "namespace MyApp; public class ServiceTests { public void T() {} }");
 
