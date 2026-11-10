@@ -34,7 +34,7 @@ Or if the user already has Cobertura coverage files:
 dotnet-crap analyze <path> --coverage <coverage-xml-path>
 ```
 
-- `<path>` can be a `.cs` file, directory, `.csproj`, `.sln`, or `.slnx` (`--run-tests` requires `.csproj`, `.sln`, `.slnx`, or directory)
+- `<path>` can be a `.cs` file, directory, `.csproj`, `.sln`, or `.slnx` (`--run-tests` requires `.csproj`, `.sln`, `.slnx`, or directory). For a solution, test projects are excluded: those that reference `Microsoft.NET.Test.Sdk` or an `xunit`, `nunit` or `mstest` package.
 - `--run-tests` runs `dotnet test` with coverage collection automatically (mutually exclusive with `--coverage`). It does not work when `global.json` selects Microsoft.Testing.Platform as the test runner; see below.
 - `--coverage` accepts one or more Cobertura XML paths (globs work)
 - `--threshold <n>` sets the CRAP threshold for one run. A project sets its own in `crap4dotnet-config.json` (`{ "crap": { "threshold": 30 } }`). The default is 30.

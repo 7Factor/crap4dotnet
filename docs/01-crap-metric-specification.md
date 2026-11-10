@@ -517,7 +517,9 @@ solution and produces a **single merged report**.
 
 1. **Source analysis**: All `.cs` files from all non-test projects in the solution are analyzed.
    Test projects (those referencing `Microsoft.NET.Test.Sdk` or containing `xunit`/`nunit`/`mstest`
-   package references) are excluded from analysis by default.
+   package references) are excluded from analysis by default. Each `.cs` file belongs to the
+   nearest listed project whose directory contains it. Files outside every listed project are
+   not analyzed.
 2. **Coverage merging**: If multiple `--coverage` files are specified, or if auto-discovery finds
    multiple coverage files, all coverage data is merged into a single lookup. The matcher merges
    before its first pass, because every pass assumes one entry per method.
