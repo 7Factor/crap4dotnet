@@ -221,4 +221,29 @@ public sealed class CoberturaCoverageReaderTests
         var xml = @"<?xml version=""1.0""?><coverage><packages></packages></coverage>";
         CoberturaCoverageReader.Read(xml).Should().BeEmpty();
     }
+
+    [Fact]
+    public void Lines_ReadHitsAndBranchCounts()
+    {
+        var xml = WrapInCobertura(@"<method name=""DoWork"" signature=""()"" line-rate=""0.5"" branch-rate=""0.5"">
+            <lines>
+                <line number=""10"" hits=""3"" branch=""True"" condition-coverage=""50% (1/2)"">
+                    <conditions><condition number=""0"" type=""jump"" coverage=""50%""/></conditions>
+                </line>
+                <line number=""11"" hits=""0"" branch=""False""/>
+            </lines>
+        </method>");
+
+        CoberturaCoverageReader.Read(xml).Single().Lines.Should().Equal(
+            new CoberturaLine(10, true, 1, 2),
+            new CoberturaLine(11, false, 0, 0));
+    }
+
+    [Fact]
+    public void Lines_AreOmittedWhenABranchLineHasNoCounts()
+    {
+        var xml = WrapInCobertura(MakeMethod(branchRate: "0.5", lineRate: "1.0", conditionCount: 2));
+
+        CoberturaCoverageReader.Read(xml).Single().Lines.Should().BeEmpty();
+    }
 }

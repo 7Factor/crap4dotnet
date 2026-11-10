@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 namespace Crap4DotNet.Core.Coverage;
@@ -8,7 +9,7 @@ namespace Crap4DotNet.Core.Coverage;
 /// per spec 6.2: branch-rate preferred for methods with branches, line-rate fallback
 /// for branchless methods. Branchless detection uses condition element count.
 /// </summary>
-public static class CoberturaCoverageReader
+public static partial class CoberturaCoverageReader
 {
     public static IReadOnlyList<CoberturaMethodCoverage> Read(string xmlContent)
     {
@@ -49,7 +50,8 @@ public static class CoberturaCoverageReader
                     Signature = signature,
                     FileName = filename,
                     StartLine = FirstLineNumber(method) ?? FirstLineNumber(cls),
-                    Coverage = coverage
+                    Coverage = coverage,
+                    Lines = ReadLines(method)
                 });
             }
         }
@@ -95,6 +97,36 @@ public static class CoberturaCoverageReader
 
         return lowest;
     }
+
+    private static List<CoberturaLine> ReadLines(XElement method)
+    {
+        var lines = new List<CoberturaLine>();
+        foreach (var line in method.Descendants("line"))
+        {
+            if (!int.TryParse(line.Attribute("number")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+                return [];
+
+            var hit = int.TryParse(line.Attribute("hits")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var hits)
+                && hits > 0;
+
+            var (covered, total) = (0, 0);
+            if (line.Descendants("condition").Any())
+            {
+                var counts = ConditionCountsRegex().Match(line.Attribute("condition-coverage")?.Value ?? "");
+                if (!counts.Success)
+                    return [];
+                covered = int.Parse(counts.Groups[1].Value, CultureInfo.InvariantCulture);
+                total = int.Parse(counts.Groups[2].Value, CultureInfo.InvariantCulture);
+            }
+
+            lines.Add(new CoberturaLine(number, hit, covered, total));
+        }
+
+        return lines;
+    }
+
+    [GeneratedRegex(@"\((\d+)/(\d+)\)")]
+    private static partial Regex ConditionCountsRegex();
 
     private static double ParseDouble(string value) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result)

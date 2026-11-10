@@ -41,7 +41,7 @@ public static class CrapAnalyzer
         string projectName = "")
     {
         // Step 2: Match complexity to coverage (left outer join)
-        var matchResult = MethodCoverageMatcher.Match(complexityResults, coverageEntries);
+        var matchResult = MethodCoverageMatcher.Match(complexityResults, CoverageMerger.Merge(coverageEntries));
 
         // Step 3: Calculate CRAP score for each method
         var methods = new List<MethodCrapData>();
