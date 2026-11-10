@@ -80,9 +80,6 @@ public static class CoberturaCoverageReader
         return ParseDouble(branchRateAttr.Value);
     }
 
-    /// <summary>
-    /// Lowest source line number recorded under an element, if any.
-    /// </summary>
     private static int? FirstLineNumber(XElement element)
     {
         int? lowest = null;

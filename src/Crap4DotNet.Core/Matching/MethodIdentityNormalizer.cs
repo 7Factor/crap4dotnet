@@ -74,25 +74,69 @@ public static partial class MethodKeyHelper
         return result;
     }
 
-    /// <summary>
-    /// Remove the generic arity marker from the method-name portion of a name-only key.
-    /// MyApp.Cache&lt;&gt;.Get&lt;&gt; -> MyApp.Cache&lt;&gt;.Get
-    /// </summary>
-    /// <remarks>
-    /// Coverlet writes no arity on a generic method's name, so the arity cannot be
-    /// recovered from the coverage side. Erasing it from both sides gives them a
-    /// common key. The declaring type keeps its arity, which both sides do supply.
-    /// </remarks>
-    public static string EraseMethodGenericArity(string nameOnlyKey)
+    // Class-level arity is kept because Cobertura records it on the class name (Cache`1).
+    public static string StripMethodGenericArity(string namePart)
     {
-        var lastDot = nameOnlyKey.LastIndexOf('.');
-        if (lastDot < 0)
-            return nameOnlyKey;
+        var depth = 0;
+        var lastDot = -1;
+        for (var i = 0; i < namePart.Length; i++)
+        {
+            switch (namePart[i])
+            {
+                case '<': depth++; break;
+                case '>': depth--; break;
+                case '.' when depth == 0: lastDot = i; break;
+            }
+        }
 
-        var methodName = nameOnlyKey[(lastDot + 1)..];
-        var angle = methodName.IndexOf('<');
-        return angle < 0 ? nameOnlyKey : string.Concat(nameOnlyKey.AsSpan(0, lastDot + 1), methodName.AsSpan(0, angle));
+        var segStart = lastDot + 1;
+        var segment = namePart[segStart..];
+        var open = segment.IndexOf('<', StringComparison.Ordinal);
+        if (open < 0 || !segment.EndsWith('>'))
+            return namePart;
+
+        return namePart[..segStart] + segment[..open];
     }
+
+    // A CLR signature has one by-ref marker (&) for out, in, and ref.
+    public static string NormalizeSignatureForMatching(string signature)
+    {
+        if (string.IsNullOrEmpty(signature) || signature == "()")
+            return "()";
+        if (!signature.StartsWith('(') || !signature.EndsWith(')'))
+            return signature;
+
+        var inner = signature[1..^1];
+        if (string.IsNullOrWhiteSpace(inner))
+            return "()";
+
+        var reduced = SplitTypeList(inner).Select(t =>
+        {
+            var x = t.Trim();
+            if (x.StartsWith("out ", StringComparison.Ordinal))
+                x = "ref " + x[4..];
+            else if (x.StartsWith("in ", StringComparison.Ordinal))
+                x = "ref " + x[3..];
+            return x;
+        });
+
+        return "(" + string.Join(", ", reduced) + ")";
+    }
+
+    // Source keys come from syntax, so T? can be a nullable reference or a nullable struct.
+    // Only a value-type keyword proves Nullable<T>, so only that ? is kept.
+    public static string StripNullableReferenceAnnotations(string signature) =>
+        NullableAnnotationRegex().Replace(signature, match =>
+            ValueTypeKeywords.Contains(match.Groups["type"].Value) ? match.Value : match.Groups["type"].Value);
+
+    private static readonly HashSet<string> ValueTypeKeywords = new(StringComparer.Ordinal)
+    {
+        "bool", "byte", "sbyte", "char", "decimal", "double", "float",
+        "int", "uint", "long", "ulong", "short", "ushort", "nint", "nuint",
+    };
+
+    [GeneratedRegex(@"(?<type>\w*)\?")]
+    private static partial Regex NullableAnnotationRegex();
 
     /// <summary>
     /// Convert CLR backtick generic arity notation to angle bracket notation.

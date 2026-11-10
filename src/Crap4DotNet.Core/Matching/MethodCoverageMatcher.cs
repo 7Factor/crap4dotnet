@@ -6,7 +6,6 @@ namespace Crap4DotNet.Core.Matching;
 /// <summary>
 /// Performs a left-outer-join from complexity results to coverage entries per spec 6.4.
 /// Every source method produces a result; unmatched methods default to coverage 0.0.
-/// Uses two-pass matching: exact canonical key first, then name-only fallback.
 /// </summary>
 public static class MethodCoverageMatcher
 {
@@ -16,45 +15,32 @@ public static class MethodCoverageMatcher
     {
         // Build coverage lookups by normalized key
         var fullKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
+        var relaxedKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
         var nameKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
-        var erasedKeyLookup = new Dictionary<string, List<CoberturaMethodCoverage>>(StringComparer.Ordinal);
 
         foreach (var entry in coverageEntries)
         {
             var fullKey = CoberturaMethodParser.ToCanonicalKey(entry);
             AddToLookup(fullKeyLookup, fullKey, entry);
 
+            AddToLookup(relaxedKeyLookup, RelaxKey(fullKey), entry);
+
             var nameKey = MethodKeyHelper.GetNameOnlyKey(fullKey);
             AddToLookup(nameKeyLookup, nameKey, entry);
-
-            var erasedKey = MethodKeyHelper.EraseMethodGenericArity(nameKey);
-            if (!string.Equals(erasedKey, nameKey, StringComparison.Ordinal))
-                AddToLookup(erasedKeyLookup, erasedKey, entry);
-            else
-                AddToLookup(erasedKeyLookup, nameKey, entry);
-        }
-
-        // Source methods that share a name-only key are the overloads a signature-less
-        // coverage key cannot tell apart; keep them together so they can be paired by
-        // source position when that happens.
-        var sourceGroups = new Dictionary<string, List<MethodComplexityResult>>(StringComparer.Ordinal);
-        var erasedSourceGroups = new Dictionary<string, List<MethodComplexityResult>>(StringComparer.Ordinal);
-        foreach (var complexity in complexityResults)
-        {
-            var key = MethodKeyHelper.GetNameOnlyKey(RoslynMethodParser.ToCanonicalKey(complexity.Identity));
-            AddToGroup(sourceGroups, key, complexity);
-
-            // The erased pass collapses Apply<T> and Apply onto one key, so it needs
-            // its own grouping rather than reusing the name-only one.
-            AddToGroup(erasedSourceGroups, MethodKeyHelper.EraseMethodGenericArity(key), complexity);
         }
 
         var matchedFullKeys = new HashSet<string>(StringComparer.Ordinal);
+        var matchedRelaxedKeys = new HashSet<string>(StringComparer.Ordinal);
         var matchedNameKeys = new HashSet<string>(StringComparer.Ordinal);
-        var matchedErasedKeys = new HashSet<string>(StringComparer.Ordinal);
         var methods = new List<MatchedMethod>();
         var unmatchedNames = new List<string>();
         var warnings = new List<DiagnosticWarning>();
+        var sourceCountByRelaxedKey = complexityResults
+            .GroupBy(c => RelaxKey(RoslynMethodParser.ToCanonicalKey(c.Identity)), StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        var sourcesByNameKey = complexityResults
+            .GroupBy(c => MethodKeyHelper.GetNameOnlyKey(RoslynMethodParser.ToCanonicalKey(c.Identity)), StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
 
         foreach (var complexity in complexityResults)
         {
@@ -66,11 +52,23 @@ public static class MethodCoverageMatcher
                 matchedFullKeys.Add(fullKey);
                 methods.Add(new MatchedMethod
                 {
-                    // One method can appear in several coverage files. Covered by any
-                    // of them means covered, and picking the first would make the
-                    // result depend on the order the files were passed in.
                     Complexity = complexity,
-                    Coverage = exactMatches.Max(m => m.Coverage)
+                    Coverage = exactMatches[0].Coverage
+                });
+                continue;
+            }
+
+            // Pass 1b: Relaxed key
+            var relaxedKey = RelaxKey(fullKey);
+            if (relaxedKeyLookup.TryGetValue(relaxedKey, out var relaxedMatches)
+                && relaxedMatches.Count == 1
+                && sourceCountByRelaxedKey[relaxedKey] == 1)
+            {
+                matchedRelaxedKeys.Add(relaxedKey);
+                methods.Add(new MatchedMethod
+                {
+                    Complexity = complexity,
+                    Coverage = relaxedMatches[0].Coverage
                 });
                 continue;
             }
@@ -78,29 +76,13 @@ public static class MethodCoverageMatcher
             // Pass 2: Fallback to name-only key (without signature)
             var nameKey = MethodKeyHelper.GetNameOnlyKey(fullKey);
             if (nameKeyLookup.TryGetValue(nameKey, out var nameMatches)
-                && TryResolveForMethod(nameMatches, complexity, sourceGroups[nameKey], out var nameCoverage))
+                && TryResolveByName(nameMatches, complexity, sourcesByNameKey[nameKey], out var nameCoverage))
             {
                 matchedNameKeys.Add(nameKey);
                 methods.Add(new MatchedMethod
                 {
                     Complexity = complexity,
                     Coverage = nameCoverage
-                });
-                continue;
-            }
-
-            // Pass 3: Generic methods carry no arity on the Cobertura side, so fall
-            // back to a key with the method's arity erased from both sides.
-            var erasedKey = MethodKeyHelper.EraseMethodGenericArity(nameKey);
-            if (erasedKeyLookup.TryGetValue(erasedKey, out var erasedMatches)
-                && TryResolveForMethod(
-                    erasedMatches, complexity, erasedSourceGroups[erasedKey], out var erasedCoverage))
-            {
-                matchedErasedKeys.Add(erasedKey);
-                methods.Add(new MatchedMethod
-                {
-                    Complexity = complexity,
-                    Coverage = erasedCoverage
                 });
                 continue;
             }
@@ -123,13 +105,11 @@ public static class MethodCoverageMatcher
             if (matchedFullKeys.Contains(kvp.Key))
                 continue;
 
-            // Check if matched by name-only fallback
-            var nameKey = MethodKeyHelper.GetNameOnlyKey(kvp.Key);
-            if (matchedNameKeys.Contains(nameKey))
+            if (matchedRelaxedKeys.Contains(RelaxKey(kvp.Key)))
                 continue;
 
-            // Check if matched by the generic-erased fallback
-            if (matchedErasedKeys.Contains(MethodKeyHelper.EraseMethodGenericArity(nameKey)))
+            var nameKey = MethodKeyHelper.GetNameOnlyKey(kvp.Key);
+            if (matchedNameKeys.Contains(nameKey))
                 continue;
 
             orphanedCount += kvp.Value.Count;
@@ -185,76 +165,46 @@ public static class MethodCoverageMatcher
         };
     }
 
-    /// <summary>
-    /// Pick the coverage entry belonging to one specific source method from candidates
-    /// that share a name-only key.
-    /// </summary>
-    /// <remarks>
-    /// Candidates collide for two unrelated reasons. The same method is reported once
-    /// per coverage file, because every file describes the whole assembly it loaded;
-    /// those entries merge to the highest coverage observed. Separately, overloads
-    /// collide whenever a signature-less key is in play, which is unavoidable for
-    /// async and iterator methods. Those are told apart by source position, since a
-    /// generated state machine keeps the positions of the method it was rewritten
-    /// from. Pairing is positional and only applies when every overload has exactly
-    /// one entry; anything less certain returns false so the caller declines rather
-    /// than attributing one overload's coverage to another.
-    /// </remarks>
-    private static bool TryResolveForMethod(
-        List<CoberturaMethodCoverage> candidates,
+    // Cobertura method names often omit generic arity, and CLR signatures have no nullable reference types.
+    private static string RelaxKey(string canonicalKey)
+    {
+        var sigStart = MethodKeyHelper.FindSignatureStart(canonicalKey);
+        return sigStart < 0
+            ? MethodKeyHelper.StripMethodGenericArity(canonicalKey)
+            : MethodKeyHelper.StripMethodGenericArity(canonicalKey[..sigStart])
+              + MethodKeyHelper.StripNullableReferenceAnnotations(canonicalKey[sigStart..]);
+    }
+
+    // Async and iterator entries have no signature, so overloads share a name key.
+    // Their state machines keep the source line numbers, so overloads pair up by line order.
+    private static bool TryResolveByName(
+        List<CoberturaMethodCoverage> entries,
         MethodComplexityResult complexity,
-        List<MethodComplexityResult> siblings,
+        List<MethodComplexityResult> sources,
         out double coverage)
     {
         coverage = 0.0;
 
-        if (candidates.Count == 0)
-            return false;
-
-        // Collapse the same entry arriving from several coverage files.
-        var distinct = candidates
-            .GroupBy(c => (c.ClassName, c.MethodName, c.Signature, c.StartLine))
-            .Select(g => new
-            {
-                g.First().FileName,
-                g.First().StartLine,
-                Coverage = g.Max(c => c.Coverage)
-            })
-            .ToList();
-
-        if (distinct.Count == 1 && siblings.Count == 1)
+        if (entries.Count == 1 && sources.Count == 1)
         {
-            coverage = distinct[0].Coverage;
+            coverage = entries[0].Coverage;
             return true;
         }
 
-        // More than one real method behind the key: pair by source position, and only
-        // when the two sides line up exactly.
-        if (distinct.Count != siblings.Count)
+        if (entries.Count != sources.Count
+            || entries.Exists(e => e.StartLine is null || !SameFile(complexity.Identity.FilePath, e.FileName))
+            || sources.Exists(s => s.Identity.LineNumber is null))
             return false;
 
-        if (distinct.Exists(d => d.StartLine is null)
-            || siblings.Exists(sibling => sibling.Identity.LineNumber is null))
-            return false;
-
-        if (!distinct.TrueForAll(d => SameFile(complexity.Identity.FilePath, d.FileName)))
-            return false;
-
-        var orderedEntries = distinct.OrderBy(d => d.StartLine).ToList();
-        var orderedSiblings = siblings.OrderBy(sibling => sibling.Identity.LineNumber).ToList();
-
-        var index = orderedSiblings.FindIndex(sibling => sibling.Identity == complexity.Identity);
-        if (index < 0)
-            return false;
-
-        coverage = orderedEntries[index].Coverage;
+        var index = sources
+            .OrderBy(s => s.Identity.LineNumber)
+            .ToList()
+            .FindIndex(s => s.Identity == complexity.Identity);
+        coverage = entries.OrderBy(e => e.StartLine).ElementAt(index).Coverage;
         return true;
     }
 
-    /// <summary>
-    /// Whether a Roslyn file path and a Cobertura filename name the same file. The
-    /// report path is relative to the project, the Roslyn path is absolute.
-    /// </summary>
+    // Cobertura file names are relative to the project; Roslyn paths are absolute.
     private static bool SameFile(string? sourcePath, string? coverageFile)
     {
         if (string.IsNullOrEmpty(sourcePath) || string.IsNullOrEmpty(coverageFile))
@@ -262,24 +212,8 @@ public static class MethodCoverageMatcher
 
         var source = sourcePath.Replace('\\', '/');
         var report = coverageFile.Replace('\\', '/');
-
         return source.EndsWith(report, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(
-                Path.GetFileName(source), Path.GetFileName(report), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static void AddToGroup(
-        Dictionary<string, List<MethodComplexityResult>> groups,
-        string key,
-        MethodComplexityResult complexity)
-    {
-        if (!groups.TryGetValue(key, out var group))
-        {
-            group = [];
-            groups[key] = group;
-        }
-
-        group.Add(complexity);
+            || string.Equals(Path.GetFileName(source), Path.GetFileName(report), StringComparison.OrdinalIgnoreCase);
     }
 
     private static void AddToLookup(

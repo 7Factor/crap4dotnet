@@ -71,24 +71,17 @@ public static partial class CoberturaMethodParser
         var className = NormalizeClassName(coverage.ClassName);
         var methodName = NormalizeMethodName(coverage.MethodName, className);
         var signature = NormalizeSignature(coverage.Signature);
-        return $"{className}.{methodName}{signature}";
+        return $"{className}.{methodName}"
+               + MethodKeyHelper.NormalizeSignatureForMatching(signature);
     }
 
-    /// <summary>
-    /// Async and iterator bodies are compiled into a generated state machine type named
-    /// "Outer/&lt;MethodName&gt;d__N", and coverage is reported against MoveNext on that
-    /// type rather than against the method in the source. Recover the owning method so
-    /// the entry can be matched to it.
-    /// </summary>
-    /// <remarks>
-    /// The generated type carries no parameter information, so the key is emitted
-    /// without a signature and resolves through the name-only fallback pass.
-    /// </remarks>
+    // The compiler moves async and iterator bodies into Outer/<Method>d__N.MoveNext,
+    // which is where Coverlet reports them. That type has no parameter list, so the key
+    // has no signature and matches only in the name-only pass.
     private static bool TryGetStateMachineOwnerKey(string className, string methodName, out string key)
     {
         key = string.Empty;
 
-        // Only MoveNext holds the rewritten body; the rest of the type is plumbing.
         if (!string.Equals(methodName, "MoveNext", StringComparison.Ordinal))
             return false;
 
@@ -99,9 +92,6 @@ public static partial class CoberturaMethodParser
         var owner = NormalizeClassName(match.Groups["owner"].Value);
         var method = match.Groups["method"].Value;
 
-        // A generic method's state machine carries the method's arity as a backtick
-        // suffix, where the source side spells the type parameters out. Both sides
-        // reduce to the same angle-bracket form.
         var arity = match.Groups["arity"].Value;
         if (arity.Length > 0)
             method += MethodKeyHelper.NormalizeBacktickGenerics(arity);
